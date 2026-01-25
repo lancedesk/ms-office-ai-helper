@@ -734,10 +734,10 @@ class DocumentService {
           }
           
           // Check for heading patterns
-          var isHeading1 = /^#\s+/.test(line) || /^[A-Z][^.!?]*[?]?$/.test(line) && line.length < 60 && !line.includes('•') && !line.includes('-');
+          var isHeading1 = /^#\s+/.test(line) || (/^[A-Z][^.!?]*[?]?$/.test(line) && line.length < 60 && !/^[•\-\*\+]/.test(line));
           var isHeading2 = /^##\s+/.test(line);
           var isHeading3 = /^###\s+/.test(line);
-          var isBullet = /^[•\-\*]\s+/.test(line);
+          var isBullet = /^[•\-\*\+]\s+/.test(line);
           var isNumbered = /^\d+\.\s+/.test(line);
           
           if (isHeading3) {
@@ -753,7 +753,7 @@ class DocumentService {
             var para = body.insertParagraph(headingText, Word.InsertLocation.end);
             para.styleBuiltIn = Word.Style.heading1;
           } else if (isBullet) {
-            var bulletText = line.replace(/^[•\-\*]\s+/, '');
+            var bulletText = line.replace(/^[•\-\*\+]\s+/, '');
             var para = body.insertParagraph(bulletText, Word.InsertLocation.end);
             para.styleBuiltIn = Word.Style.listBullet;
           } else if (isNumbered) {
@@ -767,7 +767,7 @@ class DocumentService {
               var nextLine = lines[i + 1].trim();
               if (nextLine && 
                   !/^#+\s+/.test(nextLine) && 
-                  !/^[•\-\*]\s+/.test(nextLine) && 
+                  !/^[•\-\*\+]\s+/.test(nextLine) && 
                   !/^\d+\.\s+/.test(nextLine) &&
                   !(/^[A-Z][^.!?]*[?]?$/.test(nextLine) && nextLine.length < 60)) {
                 paragraphLines.push(nextLine);
