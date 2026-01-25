@@ -473,22 +473,20 @@ async function handleSpecialCommand(message) {
   
   if (command === '/help') {
     const helpText = `🤖 **AI Helper Commands**\n\n` +
-      `**Formatting Commands (select text first):**\n` +
-      `• /bold - Make selection bold\n` +
-      `• /italic - Make selection italic\n` +
-      `• /underline - Underline selection\n` +
-      `• /center - Center align selection\n` +
-      `• /left - Left align selection\n` +
-      `• /right - Right align selection\n` +
-      `• /h1, /h2, /h3 - Apply heading styles\n\n` +
-      `**Document Commands:**\n` +
-      `• /analyze or /stats - Get document statistics\n` +
-      `• /help - Show this help message\n\n` +
-      `**Natural Commands:**\n` +
-      `• "make it bold and italic" - Format selection\n` +
-      `• "center this" - Center selected text\n` +
-      `• "Summarize my document" - Get a summary\n\n` +
-      `💡 **Tip:** Select text in your document, then tell me how to format it!`;
+      `**Slash Commands (select text first):**\n` +
+      `• /bold, /italic, /underline\n` +
+      `• /center, /left, /right\n` +
+      `• /h1, /h2, /h3 - Heading styles\n` +
+      `• /analyze - Document stats\n\n` +
+      `**Natural Language (no selection needed!):**\n` +
+      `• "make the first heading bold"\n` +
+      `• "center the title"\n` +
+      `• "make 'What is Android?' italic"\n` +
+      `• "underline the heading"\n\n` +
+      `**With Selection:**\n` +
+      `• "make it bold and italic"\n` +
+      `• "center this"\n\n` +
+      `💡 Just describe what you want - I'll do it!`;
     addAssistantMessage(helpText);
     return true;
   }
@@ -590,17 +588,73 @@ async function handleNaturalFormattingCommand(message) {
     return false;
   }
   
-  // Check if there's selected text
+  // Check if user is referring to "first heading", "the title", "the heading", etc.
+  var refersToHeading = /\b(first heading|the heading|title|the title|first title|main heading)\b/.test(lowerMessage);
+  
+  // Check for quoted text like "make 'What is Android?' bold" or 'make "hello" italic'
+  var quotedTextMatch = message.match(/['""]([^'""]+)['""]/) || message.match(/'([^']+)'/) || message.match(/"([^"]+)"/);
+  var quotedText = quotedTextMatch ? quotedTextMatch[1] : null;
+  
   try {
+    var applied = [];
+    var targetDescription = "";
+    
+    // Case 1: User refers to heading/title
+    if (refersToHeading) {
+      var formatOptions = {};
+      if (wantsBold) { formatOptions.bold = true; applied.push("bold"); }
+      if (wantsItalic) { formatOptions.italic = true; applied.push("italic"); }
+      if (wantsUnderline) { formatOptions.underline = true; applied.push("underlined"); }
+      
+      if (Object.keys(formatOptions).length > 0) {
+        var headingText = await documentService.formatFirstHeading(formatOptions);
+        targetDescription = '"' + headingText.substring(0, 30) + (headingText.length > 30 ? '...' : '') + '"';
+      }
+      
+      // Handle alignment for heading
+      if (wantsCenter) {
+        var headingText2 = await documentService.alignFirstHeading("Center");
+        applied.push("centered");
+        if (!targetDescription) {
+          targetDescription = '"' + headingText2.substring(0, 30) + (headingText2.length > 30 ? '...' : '') + '"';
+        }
+      } else if (wantsLeft) {
+        await documentService.alignFirstHeading("Left");
+        applied.push("left-aligned");
+      } else if (wantsRight) {
+        await documentService.alignFirstHeading("Right");
+        applied.push("right-aligned");
+      }
+      
+      if (applied.length > 0) {
+        addAssistantMessage("✅ Done! Made " + targetDescription + " " + applied.join(", ") + ".");
+        return true;
+      }
+    }
+    
+    // Case 2: User specified text in quotes
+    if (quotedText) {
+      var formatOptions = {};
+      if (wantsBold) { formatOptions.bold = true; applied.push("bold"); }
+      if (wantsItalic) { formatOptions.italic = true; applied.push("italic"); }
+      if (wantsUnderline) { formatOptions.underline = true; applied.push("underlined"); }
+      
+      if (Object.keys(formatOptions).length > 0) {
+        var count = await documentService.formatText(quotedText, formatOptions);
+        targetDescription = '"' + quotedText + '"';
+        addAssistantMessage("✅ Done! Made " + targetDescription + " " + applied.join(", ") + " (" + count + " occurrence" + (count > 1 ? "s" : "") + ").");
+        return true;
+      }
+    }
+    
+    // Case 3: Check if there's selected text (original behavior)
     var hasSelection = await documentService.hasSelection();
     if (!hasSelection) {
-      addAssistantMessage("⚠️ Please select some text in your document first, then tell me how to format it.");
+      addAssistantMessage("💡 I can format text for you! Try:\n• Select text first, then say \"make it bold\"\n• Or say \"make the first heading bold\"\n• Or say \"make 'specific text' italic\"");
       return true;
     }
     
-    var applied = [];
-    
-    // Apply formatting
+    // Apply formatting to selection
     if (wantsBold || wantsItalic || wantsUnderline) {
       var formatOptions = {};
       if (wantsBold) { formatOptions.bold = true; applied.push("bold"); }
@@ -627,7 +681,7 @@ async function handleNaturalFormattingCommand(message) {
       return true;
     }
   } catch (error) {
-    addAssistantMessage("❌ Error applying formatting: " + error.message);
+    addAssistantMessage("❌ Error: " + error.message);
     return true;
   }
   

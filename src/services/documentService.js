@@ -405,6 +405,179 @@ class DocumentService {
   }
 
   /**
+   * Find text and apply formatting to it (no selection needed)
+   * @param {string} searchText - Text to find and format
+   * @param {Object} options - Formatting options (bold, italic, underline, etc.)
+   * @returns {Promise<number>} Number of matches formatted
+   */
+  async formatText(searchText, options) {
+    var self = this;
+    return new Promise(function(resolve, reject) {
+      Word.run(function(context) {
+        var results = context.document.body.search(searchText, { matchCase: false });
+        results.load("items");
+        
+        return context.sync().then(function() {
+          if (results.items.length === 0) {
+            reject(new Error("Text not found: \"" + searchText + "\""));
+            return;
+          }
+          
+          for (var i = 0; i < results.items.length; i++) {
+            var font = results.items[i].font;
+            if (options.bold !== undefined) font.bold = options.bold;
+            if (options.italic !== undefined) font.italic = options.italic;
+            if (options.underline !== undefined) font.underline = options.underline ? "Single" : "None";
+            if (options.color) font.color = options.color;
+            if (options.size) font.size = options.size;
+            if (options.highlightColor) font.highlightColor = options.highlightColor;
+          }
+          
+          return context.sync().then(function() {
+            resolve(results.items.length);
+          });
+        });
+      }).catch(reject);
+    });
+  }
+
+  /**
+   * Get the first heading in the document
+   * @returns {Promise<string|null>} First heading text or null
+   */
+  async getFirstHeading() {
+    return new Promise(function(resolve, reject) {
+      Word.run(function(context) {
+        var paragraphs = context.document.body.paragraphs;
+        paragraphs.load("items,text,style");
+        
+        return context.sync().then(function() {
+          for (var i = 0; i < paragraphs.items.length; i++) {
+            var style = paragraphs.items[i].style || "";
+            if (style.indexOf("Heading") !== -1 || style.indexOf("Title") !== -1) {
+              resolve(paragraphs.items[i].text.trim());
+              return;
+            }
+          }
+          // No heading found, return first non-empty paragraph
+          for (var j = 0; j < paragraphs.items.length; j++) {
+            var text = paragraphs.items[j].text.trim();
+            if (text.length > 0) {
+              resolve(text);
+              return;
+            }
+          }
+          resolve(null);
+        });
+      }).catch(reject);
+    });
+  }
+
+  /**
+   * Format the first heading/title in the document
+   * @param {Object} options - Formatting options
+   * @returns {Promise<string>} The heading text that was formatted
+   */
+  async formatFirstHeading(options) {
+    var self = this;
+    return new Promise(function(resolve, reject) {
+      Word.run(function(context) {
+        var paragraphs = context.document.body.paragraphs;
+        paragraphs.load("items,text,style");
+        
+        return context.sync().then(function() {
+          var targetPara = null;
+          
+          // Find first heading or title
+          for (var i = 0; i < paragraphs.items.length; i++) {
+            var style = paragraphs.items[i].style || "";
+            if (style.indexOf("Heading") !== -1 || style.indexOf("Title") !== -1) {
+              targetPara = paragraphs.items[i];
+              break;
+            }
+          }
+          
+          // If no heading, use first non-empty paragraph
+          if (!targetPara) {
+            for (var j = 0; j < paragraphs.items.length; j++) {
+              if (paragraphs.items[j].text.trim().length > 0) {
+                targetPara = paragraphs.items[j];
+                break;
+              }
+            }
+          }
+          
+          if (!targetPara) {
+            reject(new Error("No heading or text found in document"));
+            return;
+          }
+          
+          var font = targetPara.font;
+          if (options.bold !== undefined) font.bold = options.bold;
+          if (options.italic !== undefined) font.italic = options.italic;
+          if (options.underline !== undefined) font.underline = options.underline ? "Single" : "None";
+          if (options.color) font.color = options.color;
+          
+          var headingText = targetPara.text.trim();
+          
+          return context.sync().then(function() {
+            resolve(headingText);
+          });
+        });
+      }).catch(reject);
+    });
+  }
+
+  /**
+   * Format first heading with alignment
+   * @param {string} alignment - "Left", "Center", "Right", "Justified"
+   * @returns {Promise<string>} The heading text that was formatted
+   */
+  async alignFirstHeading(alignment) {
+    return new Promise(function(resolve, reject) {
+      Word.run(function(context) {
+        var paragraphs = context.document.body.paragraphs;
+        paragraphs.load("items,text,style");
+        
+        return context.sync().then(function() {
+          var targetPara = null;
+          
+          // Find first heading or title
+          for (var i = 0; i < paragraphs.items.length; i++) {
+            var style = paragraphs.items[i].style || "";
+            if (style.indexOf("Heading") !== -1 || style.indexOf("Title") !== -1) {
+              targetPara = paragraphs.items[i];
+              break;
+            }
+          }
+          
+          // If no heading, use first non-empty paragraph
+          if (!targetPara) {
+            for (var j = 0; j < paragraphs.items.length; j++) {
+              if (paragraphs.items[j].text.trim().length > 0) {
+                targetPara = paragraphs.items[j];
+                break;
+              }
+            }
+          }
+          
+          if (!targetPara) {
+            reject(new Error("No heading or text found in document"));
+            return;
+          }
+          
+          targetPara.alignment = alignment;
+          var headingText = targetPara.text.trim();
+          
+          return context.sync().then(function() {
+            resolve(headingText);
+          });
+        });
+      }).catch(reject);
+    });
+  }
+
+  /**
    * Analyze document and provide insights
    * @returns {Promise<Object>} Document analysis
    */
