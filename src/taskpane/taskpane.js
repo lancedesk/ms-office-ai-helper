@@ -458,15 +458,18 @@ async function sendMessage() {
 
   // Check for special commands first (starting with /)
   if (message.startsWith('/')) {
+    addUserMessage(message); // Show the user's command
     messageInput.value = "";
     const handled = await handleSpecialCommand(message);
     if (handled) return;
   }
   
   // Check for natural language formatting commands (e.g., "make it bold")
+  addUserMessage(message); // Always show user message first
+  messageInput.value = "";
+  
   const formattingHandled = await handleNaturalFormattingCommand(message);
   if (formattingHandled) {
-    messageInput.value = "";
     return;
   }
 
@@ -508,11 +511,7 @@ async function sendMessage() {
   messageInput.disabled = true;
   sendButton.disabled = true;
 
-  // Add user message to chat
-  addUserMessage(message);
-  messageInput.value = "";
-
-  // Add to chat history
+  // User message already shown above, just add to history
   chatHistory.push({ role: 'user', content: message });
 
   // Show loading indicator
@@ -906,8 +905,24 @@ async function parseAndExecuteActions(response) {
   }
   
   // Handle REPLACE action (replace entire document content)
+  // Try strict format first (with END tag)
   var replaceRegex = /\[ACTION:\s*REPLACE\s*\]\s*---CONTENT START---\s*([\s\S]*?)\s*---CONTENT END---/gi;
   var replaceMatch = replaceRegex.exec(response);
+  
+  // If strict format not found, try lenient format (without END tag - content goes to end of response)
+  if (!replaceMatch) {
+    var lenientRegex = /\[ACTION:\s*REPLACE\s*\]\s*---CONTENT START---\s*([\s\S]+)/gi;
+    replaceMatch = lenientRegex.exec(response);
+    if (replaceMatch) {
+      // Clean up: remove any trailing notes or messages after the content
+      var content = replaceMatch[1];
+      // Remove common ending patterns like "Note:", "I've reformatted", etc.
+      content = content.replace(/\n\n\*\*Note:?\*\*[\s\S]*$/i, '');
+      content = content.replace(/\n\nI've (reformatted|corrected|fixed)[\s\S]*$/i, '');
+      content = content.replace(/\n\nPlease (let me know|confirm)[\s\S]*$/i, '');
+      replaceMatch[1] = content.trim();
+    }
+  }
   
   if (replaceMatch) {
     var newContent = replaceMatch[1].trim();
@@ -916,14 +931,17 @@ async function parseAndExecuteActions(response) {
       try {
         await documentService.replaceDocumentContent(newContent);
         console.log("REPLACE action executed successfully");
+        addSystemMessage("📝 Document has been reformatted!");
       } catch (error) {
         console.error("Error executing REPLACE action:", error);
+        addSystemMessage("⚠️ Failed to apply changes to document.");
       }
     } else {
       console.warn("REPLACE action found but content was empty");
     }
     
-    cleanedResponse = cleanedResponse.replace(replaceRegex, '').trim();
+    // Remove the action from displayed response
+    cleanedResponse = cleanedResponse.replace(/\[ACTION:\s*REPLACE\s*\]\s*---CONTENT START---[\s\S]*/gi, '').trim();
   }
   
   return cleanedResponse;
@@ -935,16 +953,24 @@ async function parseAndExecuteActions(response) {
 async function handleNaturalFormattingCommand(message) {
   var lowerMessage = message.toLowerCase();
   
-  // Check for formatting keywords
-  var wantsBold = /\b(bold|make it bold|bold it)\b/.test(lowerMessage);
-  var wantsItalic = /\b(italic|italics|italicize|make it italic)\b/.test(lowerMessage);
-  var wantsUnderline = /\b(underline|underlined)\b/.test(lowerMessage);
+  // Check for REMOVE formatting keywords (must check before add formatting)
+  var wantsRemoveBold = /\b(remove bold|unbold|not bold|remove the bold)\b/.test(lowerMessage);
+  var wantsRemoveItalic = /\b(remove italic|remove italics|unitalic|not italic|remove the italic)\b/.test(lowerMessage);
+  var wantsRemoveUnderline = /\b(remove underline|remove the underline|not underlined)\b/.test(lowerMessage);
+  
+  // Check for ADD formatting keywords
+  var wantsBold = !wantsRemoveBold && /\b(bold|make it bold|bold it)\b/.test(lowerMessage);
+  var wantsItalic = !wantsRemoveItalic && /\b(italic|italics|italicize|make it italic)\b/.test(lowerMessage);
+  var wantsUnderline = !wantsRemoveUnderline && /\b(underline|underlined)\b/.test(lowerMessage);
   var wantsCenter = /\b(center|centered|centre|centred)\b/.test(lowerMessage);
   var wantsLeft = /\b(left align|align left|left-align)\b/.test(lowerMessage);
   var wantsRight = /\b(right align|align right|right-align)\b/.test(lowerMessage);
   
   // If no formatting intent detected, return false
-  if (!wantsBold && !wantsItalic && !wantsUnderline && !wantsCenter && !wantsLeft && !wantsRight) {
+  var hasFormatIntent = wantsBold || wantsItalic || wantsUnderline || wantsCenter || wantsLeft || wantsRight;
+  var hasRemoveIntent = wantsRemoveBold || wantsRemoveItalic || wantsRemoveUnderline;
+  
+  if (!hasFormatIntent && !hasRemoveIntent) {
     return false;
   }
   
@@ -962,9 +988,14 @@ async function handleNaturalFormattingCommand(message) {
     // Case 1: User refers to heading/title
     if (refersToHeading) {
       var formatOptions = {};
+      // Add formatting
       if (wantsBold) { formatOptions.bold = true; applied.push("bold"); }
       if (wantsItalic) { formatOptions.italic = true; applied.push("italic"); }
       if (wantsUnderline) { formatOptions.underline = true; applied.push("underlined"); }
+      // Remove formatting
+      if (wantsRemoveBold) { formatOptions.bold = false; applied.push("removed bold from"); }
+      if (wantsRemoveItalic) { formatOptions.italic = false; applied.push("removed italics from"); }
+      if (wantsRemoveUnderline) { formatOptions.underline = false; applied.push("removed underline from"); }
       
       if (Object.keys(formatOptions).length > 0) {
         var headingText = await documentService.formatFirstHeading(formatOptions);
@@ -987,7 +1018,12 @@ async function handleNaturalFormattingCommand(message) {
       }
       
       if (applied.length > 0) {
-        addAssistantMessage("✅ Done! Made " + targetDescription + " " + applied.join(", ") + ".");
+        // Different message for remove vs add
+        if (hasRemoveIntent) {
+          addAssistantMessage("✅ Done! " + applied.join(", ") + " " + targetDescription + ".");
+        } else {
+          addAssistantMessage("✅ Done! Made " + targetDescription + " " + applied.join(", ") + ".");
+        }
         return true;
       }
     }
@@ -995,14 +1031,23 @@ async function handleNaturalFormattingCommand(message) {
     // Case 2: User specified text in quotes
     if (quotedText) {
       var formatOptions = {};
+      // Add formatting
       if (wantsBold) { formatOptions.bold = true; applied.push("bold"); }
       if (wantsItalic) { formatOptions.italic = true; applied.push("italic"); }
       if (wantsUnderline) { formatOptions.underline = true; applied.push("underlined"); }
+      // Remove formatting
+      if (wantsRemoveBold) { formatOptions.bold = false; applied.push("removed bold from"); }
+      if (wantsRemoveItalic) { formatOptions.italic = false; applied.push("removed italics from"); }
+      if (wantsRemoveUnderline) { formatOptions.underline = false; applied.push("removed underline from"); }
       
       if (Object.keys(formatOptions).length > 0) {
         var count = await documentService.formatText(quotedText, formatOptions);
         targetDescription = '"' + quotedText + '"';
-        addAssistantMessage("✅ Done! Made " + targetDescription + " " + applied.join(", ") + " (" + count + " occurrence" + (count > 1 ? "s" : "") + ").");
+        if (hasRemoveIntent) {
+          addAssistantMessage("✅ Done! " + applied.join(", ") + " " + targetDescription + " (" + count + " occurrence" + (count > 1 ? "s" : "") + ").");
+        } else {
+          addAssistantMessage("✅ Done! Made " + targetDescription + " " + applied.join(", ") + " (" + count + " occurrence" + (count > 1 ? "s" : "") + ").");
+        }
         return true;
       }
     }
@@ -1010,7 +1055,7 @@ async function handleNaturalFormattingCommand(message) {
     // Case 3: Check if there's selected text (original behavior)
     var hasSelection = await documentService.hasSelection();
     if (!hasSelection) {
-      addAssistantMessage("💡 I can format text for you! Try:\n• Select text first, then say \"make it bold\"\n• Or say \"make the first heading bold\"\n• Or say \"make 'specific text' italic\"");
+      addAssistantMessage("💡 I can format text for you! Try:\n• Select text first, then say \"make it bold\"\n• Or say \"make the first heading bold\"\n• Or say \"make 'specific text' italic\"\n• Or say \"remove italics from the heading\"");
       return true;
     }
     
