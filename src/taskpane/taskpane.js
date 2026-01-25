@@ -607,48 +607,54 @@ function buildSystemContext() {
 ## Your Capabilities:
 1. **Read & Analyze**: Read document content, provide summaries, answer questions
 2. **Format Text**: Apply bold, italic, underline, alignment, headings
-3. **Find & Edit**: Search for specific text and modify it
-4. **Generate Content**: Create or expand text
-5. **Insert Content**: Add summaries, new sections, or generated content to the document
+3. **Rewrite/Reformat**: Completely rewrite or reformat the document with proper structure
+4. **Insert Content**: Add new sections to the document
 
-## IMPORTANT - Action Commands:
-When the user asks you to FORMAT, EDIT, or MODIFY the document, you MUST include an ACTION command in your response.
+## CRITICAL - You MUST Use Action Commands:
+When the user asks you to FORMAT, EDIT, REFORMAT, FIX, or MODIFY the document, you MUST include an ACTION command. DO NOT just show the corrected text - use an action to apply it!
 
-### FORMAT Action (for styling existing text):
-[ACTION: FORMAT target="text to find or 'first heading'" bold=true italic=true underline=true center=true]
+### ACTION: FORMAT (style specific text)
+[ACTION: FORMAT target="text to find" bold=true italic=true underline=true center=true]
 
-Examples:
-- User: "make the first heading bold" → Include: [ACTION: FORMAT target="first heading" bold=true]
-- User: "center the title and make it italic" → Include: [ACTION: FORMAT target="first heading" italic=true center=true]
-- User: "make 'What is Android?' bold and underline" → Include: [ACTION: FORMAT target="What is Android?" bold=true underline=true]
+Example: User says "make the first heading bold"
+→ You respond: "Done! I've made the heading bold. [ACTION: FORMAT target="first heading" bold=true]"
 
-### INSERT Action (for adding new content to document):
-[ACTION: INSERT heading="Section Title" content="The content to insert..." newpage=true]
+### ACTION: REPLACE (replace entire document with reformatted content)
+Use this when user asks to "fix formatting", "reformat the document", "correct the document", etc.
+[ACTION: REPLACE]
+---CONTENT START---
+Your reformatted document content here...
+Use proper structure with headings, paragraphs, lists.
+---CONTENT END---
 
-Examples:
-- User: "summarize this document and add the summary to it" → First provide summary, then: [ACTION: INSERT heading="Summary" content="Your summary text here..." newpage=true]
-- User: "add a conclusion" → [ACTION: INSERT heading="Conclusion" content="Your generated conclusion..." newpage=false]
-- User: "create a new document with this summary" → [ACTION: INSERT heading="Document Summary" content="..." newpage=true]
+Example: User says "fix the formatting issues in this document"
+→ You respond: "I've reformatted the document with proper headings, spacing, and structure.
+[ACTION: REPLACE]
+---CONTENT START---
+What is Android?
 
-## Formatting Options:
-- bold=true/false
-- italic=true/false  
-- underline=true/false
-- center=true (centers the text)
-- left=true (left align)
-- right=true (right align)
+Android is an open-source operating system...
 
-## INSERT Options:
-- heading="Title" (optional - adds a heading)
-- content="..." (the actual text content to insert)
-- newpage=true/false (whether to start on new page, default true)
+Features of Android
 
-## Guidelines:
-- ALWAYS include an [ACTION:...] command when user wants document changes
-- For summaries that should be ADDED to the document, use INSERT action
-- Be concise - confirm what you did in 1-2 sentences
-- If you don't know what text to target, ask the user
-- For general questions (not edits), just respond normally without action commands`;
+• Beautiful UI - intuitive user interface
+• Connectivity - supports WiFi, Bluetooth, NFC
+...
+---CONTENT END---"
+
+### ACTION: INSERT (add new content at end)
+[ACTION: INSERT heading="Section Title" content="Content here..." newpage=true]
+
+Example: User says "add a summary to the document"
+→ You respond: "I've added a summary section. [ACTION: INSERT heading="Summary" content="This document covers..." newpage=true]"
+
+## IMPORTANT RULES:
+1. ALWAYS use an ACTION command when the user wants document changes - never just show text!
+2. For "fix formatting" or "reformat" requests, use REPLACE to rewrite the whole document properly
+3. For small changes to specific text, use FORMAT
+4. For adding new content, use INSERT
+5. If you're not sure what to do, ask the user
+6. Be concise in your confirmation message`;
 }
 
 /**
@@ -897,6 +903,27 @@ async function parseAndExecuteActions(response) {
     }
     
     cleanedResponse = cleanedResponse.replace(insertRegex, '').trim();
+  }
+  
+  // Handle REPLACE action (replace entire document content)
+  var replaceRegex = /\[ACTION:\s*REPLACE\s*\]\s*---CONTENT START---\s*([\s\S]*?)\s*---CONTENT END---/gi;
+  var replaceMatch = replaceRegex.exec(response);
+  
+  if (replaceMatch) {
+    var newContent = replaceMatch[1].trim();
+    
+    if (newContent) {
+      try {
+        await documentService.replaceDocumentContent(newContent);
+        console.log("REPLACE action executed successfully");
+      } catch (error) {
+        console.error("Error executing REPLACE action:", error);
+      }
+    } else {
+      console.warn("REPLACE action found but content was empty");
+    }
+    
+    cleanedResponse = cleanedResponse.replace(replaceRegex, '').trim();
   }
   
   return cleanedResponse;

@@ -706,11 +706,13 @@ class DocumentService {
   }
 
   /**
-   * Replace entire document content (essentially creating a "new" document)
-   * @param {string} content - The new content
+   * Replace entire document content with properly formatted content
+   * Handles headings (lines starting with # or ending with :), bullet points, etc.
+   * @param {string} content - The new content with simple markdown-like formatting
    * @returns {Promise<boolean>} Success status
    */
   async replaceDocumentContent(content) {
+    var self = this;
     return new Promise(function(resolve, reject) {
       Word.run(function(context) {
         var body = context.document.body;
@@ -718,8 +720,68 @@ class DocumentService {
         // Clear existing content
         body.clear();
         
-        // Insert new content
-        body.insertText(content, Word.InsertLocation.start);
+        // Split content into lines
+        var lines = content.split('\n');
+        var i = 0;
+        
+        while (i < lines.length) {
+          var line = lines[i].trim();
+          
+          // Skip empty lines
+          if (!line) {
+            i++;
+            continue;
+          }
+          
+          // Check for heading patterns
+          var isHeading1 = /^#\s+/.test(line) || /^[A-Z][^.!?]*[?]?$/.test(line) && line.length < 60 && !line.includes('•') && !line.includes('-');
+          var isHeading2 = /^##\s+/.test(line);
+          var isHeading3 = /^###\s+/.test(line);
+          var isBullet = /^[•\-\*]\s+/.test(line);
+          var isNumbered = /^\d+\.\s+/.test(line);
+          
+          if (isHeading3) {
+            var headingText = line.replace(/^###\s+/, '');
+            var para = body.insertParagraph(headingText, Word.InsertLocation.end);
+            para.styleBuiltIn = Word.Style.heading3;
+          } else if (isHeading2) {
+            var headingText = line.replace(/^##\s+/, '');
+            var para = body.insertParagraph(headingText, Word.InsertLocation.end);
+            para.styleBuiltIn = Word.Style.heading2;
+          } else if (isHeading1) {
+            var headingText = line.replace(/^#\s+/, '');
+            var para = body.insertParagraph(headingText, Word.InsertLocation.end);
+            para.styleBuiltIn = Word.Style.heading1;
+          } else if (isBullet) {
+            var bulletText = line.replace(/^[•\-\*]\s+/, '');
+            var para = body.insertParagraph(bulletText, Word.InsertLocation.end);
+            para.styleBuiltIn = Word.Style.listBullet;
+          } else if (isNumbered) {
+            var numberedText = line.replace(/^\d+\.\s+/, '');
+            var para = body.insertParagraph(numberedText, Word.InsertLocation.end);
+            para.styleBuiltIn = Word.Style.listNumber;
+          } else {
+            // Regular paragraph - collect consecutive non-empty, non-special lines
+            var paragraphLines = [line];
+            while (i + 1 < lines.length) {
+              var nextLine = lines[i + 1].trim();
+              if (nextLine && 
+                  !/^#+\s+/.test(nextLine) && 
+                  !/^[•\-\*]\s+/.test(nextLine) && 
+                  !/^\d+\.\s+/.test(nextLine) &&
+                  !(/^[A-Z][^.!?]*[?]?$/.test(nextLine) && nextLine.length < 60)) {
+                paragraphLines.push(nextLine);
+                i++;
+              } else {
+                break;
+              }
+            }
+            var fullParagraph = paragraphLines.join(' ');
+            body.insertParagraph(fullParagraph, Word.InsertLocation.end);
+          }
+          
+          i++;
+        }
         
         return context.sync().then(function() {
           resolve(true);
