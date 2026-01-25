@@ -707,8 +707,8 @@ class DocumentService {
 
   /**
    * Replace entire document content with properly formatted content
-   * Handles headings (lines starting with # or ending with :), bullet points, etc.
-   * @param {string} content - The new content with simple markdown-like formatting
+   * Handles headings (lines starting with # or **), bullet points, tables, etc.
+   * @param {string} content - The new content with markdown-like formatting
    * @returns {Promise<boolean>} Success status
    */
   async replaceDocumentContent(content) {
@@ -724,6 +724,29 @@ class DocumentService {
         var lines = content.split('\n');
         var i = 0;
         
+        // Helper to strip markdown bold/italic
+        function stripMarkdown(text) {
+          return text
+            .replace(/\*\*\*(.+?)\*\*\*/g, '$1')  // ***bold italic***
+            .replace(/\*\*(.+?)\*\*/g, '$1')       // **bold**
+            .replace(/\*(.+?)\*/g, '$1')           // *italic*
+            .replace(/__(.+?)__/g, '$1')           // __underline__
+            .replace(/_(.+?)_/g, '$1')             // _italic_
+            .trim();
+        }
+        
+        // Helper to detect if line is a table row
+        function isTableRow(line) {
+          // Must have at least 2 pipe characters and content between them
+          var pipeCount = (line.match(/\|/g) || []).length;
+          return pipeCount >= 2 && !/^\s*\|?\s*[-:]+\s*\|/.test(line); // Not a separator row
+        }
+        
+        // Helper to detect table separator row (| --- | --- |)
+        function isTableSeparator(line) {
+          return /^\s*\|?\s*[-:]+\s*\|/.test(line) && /[-:]{3,}/.test(line);
+        }
+        
         while (i < lines.length) {
           var line = lines[i].trim();
           
@@ -733,51 +756,106 @@ class DocumentService {
             continue;
           }
           
-          // Check for heading patterns
-          var isHeading1 = /^#\s+/.test(line) || (/^[A-Z][^.!?]*[?]?$/.test(line) && line.length < 60 && !/^[•\-\*\+]/.test(line));
-          var isHeading2 = /^##\s+/.test(line);
-          var isHeading3 = /^###\s+/.test(line);
-          var isBullet = /^[•\-\*\+]\s+/.test(line);
-          var isNumbered = /^\d+\.\s+/.test(line);
+          // Skip table separator rows
+          if (isTableSeparator(line)) {
+            i++;
+            continue;
+          }
           
-          if (isHeading3) {
-            var headingText = line.replace(/^###\s+/, '');
-            var para = body.insertParagraph(headingText, Word.InsertLocation.end);
-            para.styleBuiltIn = Word.Style.heading3;
-          } else if (isHeading2) {
-            var headingText = line.replace(/^##\s+/, '');
-            var para = body.insertParagraph(headingText, Word.InsertLocation.end);
-            para.styleBuiltIn = Word.Style.heading2;
-          } else if (isHeading1) {
-            var headingText = line.replace(/^#\s+/, '');
-            var para = body.insertParagraph(headingText, Word.InsertLocation.end);
-            para.styleBuiltIn = Word.Style.heading1;
-          } else if (isBullet) {
-            var bulletText = line.replace(/^[•\-\*\+]\s+/, '');
-            var para = body.insertParagraph(bulletText, Word.InsertLocation.end);
-            para.styleBuiltIn = Word.Style.listBullet;
-          } else if (isNumbered) {
-            var numberedText = line.replace(/^\d+\.\s+/, '');
-            var para = body.insertParagraph(numberedText, Word.InsertLocation.end);
-            para.styleBuiltIn = Word.Style.listNumber;
-          } else {
-            // Regular paragraph - collect consecutive non-empty, non-special lines
-            var paragraphLines = [line];
-            while (i + 1 < lines.length) {
-              var nextLine = lines[i + 1].trim();
-              if (nextLine && 
-                  !/^#+\s+/.test(nextLine) && 
-                  !/^[•\-\*\+]\s+/.test(nextLine) && 
-                  !/^\d+\.\s+/.test(nextLine) &&
-                  !(/^[A-Z][^.!?]*[?]?$/.test(nextLine) && nextLine.length < 60)) {
-                paragraphLines.push(nextLine);
+          // Check if this starts a table (line has | characters)
+          if (isTableRow(line)) {
+            // Collect all table rows
+            var tableRows = [];
+            while (i < lines.length) {
+              var tableLine = lines[i].trim();
+              if (!tableLine) {
+                i++;
+                break;
+              }
+              if (isTableSeparator(tableLine)) {
+                i++;
+                continue;
+              }
+              if (isTableRow(tableLine)) {
+                // Parse cells
+                var cells = tableLine.split('|')
+                  .map(function(c) { return stripMarkdown(c.trim()); })
+                  .filter(function(c) { return c.length > 0; });
+                if (cells.length > 0) {
+                  tableRows.push(cells);
+                }
                 i++;
               } else {
                 break;
               }
             }
-            var fullParagraph = paragraphLines.join(' ');
-            body.insertParagraph(fullParagraph, Word.InsertLocation.end);
+            
+            // Create Word table if we have rows
+            if (tableRows.length > 1) {
+              var numCols = Math.max.apply(null, tableRows.map(function(r) { return r.length; }));
+              var numRows = tableRows.length;
+              
+              var table = body.insertTable(numRows, numCols, Word.InsertLocation.end, null);
+              
+              for (var row = 0; row < tableRows.length; row++) {
+                for (var col = 0; col < tableRows[row].length && col < numCols; col++) {
+                  var cell = table.getCell(row, col);
+                  cell.value = tableRows[row][col];
+                  // Bold the header row
+                  if (row === 0) {
+                    cell.body.font.bold = true;
+                    cell.shadingColor = '#E0E0E0';
+                  }
+                }
+              }
+              
+              try {
+                table.styleBuiltIn = Word.Style.gridTable4_Accent1;
+              } catch (e) {
+                // Style might not be available
+              }
+            }
+            continue;
+          }
+          
+          // Check for heading patterns
+          // **Bold Text** on its own line = Heading
+          var isBoldHeading = /^\*\*[^*]+\*\*\s*$/.test(line);
+          var isHashHeading1 = /^#\s+/.test(line);
+          var isHashHeading2 = /^##\s+/.test(line);
+          var isHashHeading3 = /^###\s+/.test(line);
+          var isBullet = /^[•\-\*\+]\s+/.test(line) && !/^\*\*/.test(line);
+          var isNumbered = /^\d+\.\s+/.test(line);
+          
+          if (isHashHeading3) {
+            var headingText = stripMarkdown(line.replace(/^###\s+/, ''));
+            var para = body.insertParagraph(headingText, Word.InsertLocation.end);
+            para.styleBuiltIn = Word.Style.heading3;
+          } else if (isHashHeading2) {
+            var headingText = stripMarkdown(line.replace(/^##\s+/, ''));
+            var para = body.insertParagraph(headingText, Word.InsertLocation.end);
+            para.styleBuiltIn = Word.Style.heading2;
+          } else if (isHashHeading1) {
+            var headingText = stripMarkdown(line.replace(/^#\s+/, ''));
+            var para = body.insertParagraph(headingText, Word.InsertLocation.end);
+            para.styleBuiltIn = Word.Style.heading1;
+          } else if (isBoldHeading) {
+            // **Heading Text** becomes Heading 2
+            var headingText = stripMarkdown(line);
+            var para = body.insertParagraph(headingText, Word.InsertLocation.end);
+            para.styleBuiltIn = Word.Style.heading2;
+          } else if (isBullet) {
+            var bulletText = stripMarkdown(line.replace(/^[•\-\*\+]\s+/, ''));
+            var para = body.insertParagraph(bulletText, Word.InsertLocation.end);
+            para.styleBuiltIn = Word.Style.listBullet;
+          } else if (isNumbered) {
+            var numberedText = stripMarkdown(line.replace(/^\d+\.\s+/, ''));
+            var para = body.insertParagraph(numberedText, Word.InsertLocation.end);
+            para.styleBuiltIn = Word.Style.listNumber;
+          } else {
+            // Regular paragraph
+            var paragraphText = stripMarkdown(line);
+            body.insertParagraph(paragraphText, Word.InsertLocation.end);
           }
           
           i++;
