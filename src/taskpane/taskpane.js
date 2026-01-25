@@ -1,16 +1,13 @@
 /* global Office, Word */
 
-// Polyfills for IE11/Office 2019 compatibility
-require('whatwg-fetch');
+// Import services (will be bundled by webpack)
+import GroqService from '../services/groqService';
+import GeminiService from '../services/geminiService';
+import APIKeyManager from '../services/apiKeyManager';
+import DocumentService from '../services/documentService';
 
 // Wrap everything in try-catch to catch any initialization errors
 try {
-
-// Import services (will be bundled by webpack)
-const GroqService = require('../services/groqService');
-const GeminiService = require('../services/geminiService');
-const APIKeyManager = require('../services/apiKeyManager');
-const DocumentService = require('../services/documentService');
 
 // Debug logging helper - console only (no alert, no DOM manipulation at top level)
 function debugLog(message) {

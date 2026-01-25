@@ -206,5 +206,5 @@ class APIKeyManager {
 }
 
 // Export for use in other files
-module.exports = APIKeyManager;
+export default APIKeyManager;
 

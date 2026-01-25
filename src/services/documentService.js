@@ -633,4 +633,4 @@ class DocumentService {
 }
 
 // Export for use in other files
-module.exports = DocumentService;
+export default DocumentService;

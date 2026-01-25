@@ -216,4 +216,4 @@ class GroqService {
 }
 
 // Export for use in other files
-module.exports = GroqService;
+export default GroqService;

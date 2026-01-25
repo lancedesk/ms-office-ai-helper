@@ -164,4 +164,4 @@ class GeminiService {
 }
 
 // Export for use in other files
-module.exports = GeminiService;
+export default GeminiService;
