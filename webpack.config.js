@@ -87,6 +87,24 @@ module.exports = {
   module: {
     rules: [
       {
+        test: /\.js$/,
+        exclude: /node_modules/,
+        use: {
+          loader: "babel-loader",
+          options: {
+            presets: [
+              ["@babel/preset-env", {
+                targets: {
+                  ie: "11"  // Office 2019 uses IE11-based WebView
+                },
+                useBuiltIns: "usage",
+                corejs: 3
+              }]
+            ]
+          }
+        }
+      },
+      {
         test: /\.css$/,
         use: ["style-loader", "css-loader"]
       },
