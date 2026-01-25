@@ -136,7 +136,7 @@ async function initializeApp() {
   try {
     const savedGroqKey = await apiKeyManager.getGroqApiKey();
     const savedGeminiKey = await apiKeyManager.getGeminiApiKey();
-    const savedProvider = await apiKeyManager.getSelectedProvider();
+    const savedProvider = await apiKeyManager.getActiveProvider();
     
     if (savedGroqKey) {
       groqService.setApiKey(savedGroqKey);
@@ -1270,33 +1270,7 @@ async function getDocumentContext() {
   });
 }
 
-async function sendDocumentContextToWebInterface() {
-  try {
-    const documentContent = await getDocumentContext();
-    const response = await fetch("https://your-web-interface-url.com/api/context", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ documentContent }),
-    });
 
-    if (!response.ok) {
-      throw new Error(`Failed to send document context: ${response.statusText}`);
-    }
-
-    console.log("Document context sent successfully.");
-  } catch (error) {
-    console.error("Error sending document context:", error);
-  }
-}
-
-// Example usage: Call this function when the taskpane is loaded
-Office.onReady((info) => {
-  if (info && info.host === Office.HostType.Word) {
-    sendDocumentContextToWebInterface();
-  }
-});
 
 // Expose functions used by inline onclick attributes so they work in the browser and Word
 if (typeof window !== 'undefined') {
