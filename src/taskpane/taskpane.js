@@ -151,7 +151,6 @@ async function initializeApp() {
     const currentService = currentProvider === 'groq' ? groqService : geminiService;
     if (currentService.hasApiKey()) {
       addSystemMessage(`🎉 Ready to chat! Using: ${currentProvider === 'groq' ? 'Groq' : 'Google Gemini'}`);
-      addProviderSwitchButton();
     } else {
       // No API key configured - show setup
       addSystemMessage(`👋 Welcome! Please configure your API key to get started.`);
@@ -752,7 +751,6 @@ async function saveApiKey(provider) {
       // Show success message
       addSystemMessage(`✅ ${apiKeyManager.getProviderName(provider)} key saved successfully!`);
       addAssistantMessage(`Great! I'm ready to chat using ${apiKeyManager.getProviderName(provider)}.\n\nI can help you with:\n\n• Summarizing documents\n• Editing and formatting text\n• Answering questions about your document\n• Creating tables, headers, and more\n\nWhat would you like to do?`);
-      addProviderSwitchButton();
     } else {
       errorDiv.textContent = `❌ Failed to save ${provider === 'groq' ? 'Groq' : 'Gemini'} API key`;
       errorDiv.className = "api-key-error error";
@@ -766,62 +764,180 @@ async function saveApiKey(provider) {
   }
 }
 
-function addProviderSwitchButton() {
-  // Check if button already exists
-  if (document.getElementById('provider-switch-btn')) {
-    return;
-  }
+// Provider switch functions removed - now handled in settings panel
+
+async function showApiKeySettings() {
+  // Check if we already have keys configured
+  const hasGroqKey = await apiKeyManager.hasApiKey('groq');
+  const hasGeminiKey = await apiKeyManager.hasApiKey('gemini');
   
+  if (hasGroqKey || hasGeminiKey) {
+    // Show settings panel with current configuration
+    showSettingsPanel(hasGroqKey, hasGeminiKey);
+  } else {
+    // No keys - show initial setup
+    showApiKeySetup();
+  }
+}
+
+async function showSettingsPanel(hasGroqKey, hasGeminiKey) {
+  removeWelcomeScreen();
   initializeElements();
   
-  const switchDiv = document.createElement("div");
-  switchDiv.id = "provider-switch";
-  switchDiv.className = "provider-switch";
-  switchDiv.innerHTML = `
-    <button id="provider-switch-btn" class="provider-switch-btn" onclick="showProviderSwitcher()">
-      🔄 Switch Provider
-    </button>
+  // Remove any existing settings panel
+  const existingPanel = document.getElementById('settings-panel');
+  if (existingPanel) {
+    existingPanel.remove();
+  }
+  
+  const currentProviderName = apiKeyManager.getProviderName(currentProvider);
+  
+  const panelDiv = document.createElement('div');
+  panelDiv.id = 'settings-panel';
+  panelDiv.className = 'api-key-setup';
+  panelDiv.innerHTML = `
+    <div class="setup-content">
+      <h2>⚙️ Settings</h2>
+      
+      <div class="settings-section">
+        <h3 style="color: #667eea; margin-bottom: 12px;">🎯 Active Provider</h3>
+        <p style="color: #666; font-size: 13px; margin-bottom: 12px;">Currently using: <strong>${currentProviderName}</strong></p>
+        
+        <div class="provider-selector" style="display: flex; gap: 10px; margin-bottom: 20px;">
+          <button id="select-groq-btn" class="${currentProvider === 'groq' ? 'primary-button' : 'secondary-button'}" 
+                  style="flex: 1; ${!hasGroqKey ? 'opacity: 0.5;' : ''}" 
+                  ${!hasGroqKey ? 'disabled' : ''}>
+            ⚡ Groq ${hasGroqKey ? '✓' : '(not set)'}
+          </button>
+          <button id="select-gemini-btn" class="${currentProvider === 'gemini' ? 'primary-button' : 'secondary-button'}" 
+                  style="flex: 1; ${!hasGeminiKey ? 'opacity: 0.5;' : ''}" 
+                  ${!hasGeminiKey ? 'disabled' : ''}>
+            🧠 Gemini ${hasGeminiKey ? '✓' : '(not set)'}
+          </button>
+        </div>
+      </div>
+      
+      <div class="settings-section" style="border-top: 1px solid #eee; padding-top: 20px;">
+        <h3 style="color: #667eea; margin-bottom: 12px;">🔑 API Keys</h3>
+        
+        <div class="setup-step" style="margin-bottom: 12px;">
+          <strong>Groq API Key ${hasGroqKey ? '✅' : ''}</strong>
+          <div style="display: flex; gap: 8px; margin-top: 8px;">
+            <input type="password" id="settings-groq-key" placeholder="${hasGroqKey ? '••••••••••••••••' : 'gsk_...'}" class="api-key-input" style="flex: 1;" />
+            <button id="save-groq-key-btn" class="secondary-button" style="flex: none; padding: 10px 16px;">Save</button>
+          </div>
+        </div>
+        
+        <div class="setup-step">
+          <strong>Gemini API Key ${hasGeminiKey ? '✅' : ''}</strong>
+          <div style="display: flex; gap: 8px; margin-top: 8px;">
+            <input type="password" id="settings-gemini-key" placeholder="${hasGeminiKey ? '••••••••••••••••' : 'AIza...'}" class="api-key-input" style="flex: 1;" />
+            <button id="save-gemini-key-btn" class="secondary-button" style="flex: none; padding: 10px 16px;">Save</button>
+          </div>
+        </div>
+        
+        <div id="settings-status" class="api-key-error" style="margin-top: 12px;"></div>
+      </div>
+      
+      <div class="setup-buttons" style="margin-top: 20px;">
+        <button id="close-settings-btn" class="primary-button">Close Settings</button>
+      </div>
+      
+      <p class="privacy-note">🔒 Your API keys are stored locally and never shared.</p>
+    </div>
   `;
   
-  // Insert after input container but we can append to chat
-  const inputContainer = document.getElementById('input-container');
-  inputContainer.parentNode.insertBefore(switchDiv, inputContainer);
+  chatContainer.appendChild(panelDiv);
+  scrollToBottom();
+  
+  // Attach event listeners
+  document.getElementById('select-groq-btn').onclick = () => switchActiveProvider('groq');
+  document.getElementById('select-gemini-btn').onclick = () => switchActiveProvider('gemini');
+  document.getElementById('save-groq-key-btn').onclick = () => saveKeyFromSettings('groq');
+  document.getElementById('save-gemini-key-btn').onclick = () => saveKeyFromSettings('gemini');
+  document.getElementById('close-settings-btn').onclick = closeSettingsPanel;
 }
 
-async function showProviderSwitcher() {
-  const groqKey = await apiKeyManager.hasApiKey('groq');
-  const geminiKey = await apiKeyManager.hasApiKey('gemini');
-  
-  if (!groqKey && !geminiKey) {
-    addSystemMessage("No API keys configured");
+async function switchActiveProvider(provider) {
+  const hasKey = await apiKeyManager.hasApiKey(provider);
+  if (!hasKey) {
+    const statusDiv = document.getElementById('settings-status');
+    statusDiv.textContent = `⚠️ Please add a ${apiKeyManager.getProviderName(provider)} API key first`;
+    statusDiv.className = 'api-key-error error';
     return;
   }
   
-  if (groqKey && !geminiKey) {
-    addSystemMessage("Only Groq is configured");
+  currentProvider = provider;
+  await apiKeyManager.setActiveProvider(provider);
+  
+  // Update UI
+  const groqBtn = document.getElementById('select-groq-btn');
+  const geminiBtn = document.getElementById('select-gemini-btn');
+  
+  if (provider === 'groq') {
+    groqBtn.className = 'primary-button';
+    geminiBtn.className = 'secondary-button';
+  } else {
+    groqBtn.className = 'secondary-button';
+    geminiBtn.className = 'primary-button';
+  }
+  
+  const statusDiv = document.getElementById('settings-status');
+  statusDiv.textContent = `✅ Switched to ${apiKeyManager.getProviderName(provider)}`;
+  statusDiv.className = 'api-key-error success';
+}
+
+async function saveKeyFromSettings(provider) {
+  const inputId = provider === 'groq' ? 'settings-groq-key' : 'settings-gemini-key';
+  const input = document.getElementById(inputId);
+  const statusDiv = document.getElementById('settings-status');
+  const apiKey = input.value.trim();
+  
+  if (!apiKey) {
+    statusDiv.textContent = '⚠️ Please enter an API key';
+    statusDiv.className = 'api-key-error error';
     return;
   }
   
-  if (!groqKey && geminiKey) {
-    addSystemMessage("Only Gemini is configured");
+  if (!apiKeyManager.validateFormat(apiKey, provider)) {
+    const format = provider === 'groq' ? 'gsk_' : 'AIza';
+    statusDiv.textContent = `⚠️ Invalid format. ${apiKeyManager.getProviderName(provider)} keys start with '${format}'`;
+    statusDiv.className = 'api-key-error error';
     return;
   }
   
-  // Both are available
-  const dialog = confirm(
-    `Current provider: ${apiKeyManager.getProviderName(currentProvider)}\n\n` +
-    `Switch to ${currentProvider === 'groq' ? 'Gemini' : 'Groq'}?`
-  );
-  
-  if (dialog) {
-    currentProvider = currentProvider === 'groq' ? 'gemini' : 'groq';
-    await apiKeyManager.setActiveProvider(currentProvider);
-    addSystemMessage(`✅ Switched to ${apiKeyManager.getProviderName(currentProvider)}`);
+  try {
+    if (provider === 'groq') {
+      await apiKeyManager.saveGroqApiKey(apiKey);
+      groqService.setApiKey(apiKey);
+    } else {
+      await apiKeyManager.saveGeminiApiKey(apiKey);
+      geminiService.setApiKey(apiKey);
+    }
+    
+    statusDiv.textContent = `✅ ${apiKeyManager.getProviderName(provider)} key saved!`;
+    statusDiv.className = 'api-key-error success';
+    input.value = '';
+    input.placeholder = '••••••••••••••••';
+    
+    // Enable the provider button
+    const btnId = provider === 'groq' ? 'select-groq-btn' : 'select-gemini-btn';
+    const btn = document.getElementById(btnId);
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.innerHTML = provider === 'groq' ? '⚡ Groq ✓' : '🧠 Gemini ✓';
+    
+  } catch (error) {
+    statusDiv.textContent = `❌ Error: ${error.message}`;
+    statusDiv.className = 'api-key-error error';
   }
 }
 
-function showApiKeySettings() {
-  showApiKeySetup();
+function closeSettingsPanel() {
+  const panel = document.getElementById('settings-panel');
+  if (panel) {
+    panel.remove();
+  }
 }
 
 async function getDocumentContext() {
@@ -868,8 +984,10 @@ Office.onReady((info) => {
 if (typeof window !== 'undefined') {
   window.switchSetupProvider = switchSetupProvider;
   window.toggleApiKeyVisibility = toggleApiKeyVisibility;
-  window.showProviderSwitcher = showProviderSwitcher;
   window.showApiKeySettings = showApiKeySettings;
+  window.switchActiveProvider = switchActiveProvider;
+  window.saveKeyFromSettings = saveKeyFromSettings;
+  window.closeSettingsPanel = closeSettingsPanel;
 }
 
 } catch (bundleError) {

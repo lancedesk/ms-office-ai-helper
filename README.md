@@ -100,7 +100,52 @@ Then update the `manifest.xml` URLs to point to your GitHub Pages URL.
 3. Update all URLs in `manifest.xml` to point to your server
 4. Sideload the updated manifest in Word
 
-## 🔧 Troubleshooting
+## � Sideloading the Add-in
+
+### Microsoft 365 / Office 365 (Recommended)
+
+1. Open Word
+2. Go to **Insert** → **Get Add-ins** → **MY ADD-INS** tab
+3. Click **Upload My Add-in**
+4. Browse to `manifest.xml` (or download from GitHub Pages)
+5. Click **Upload**
+
+### Office 2019 / Office 2016 (Shared Folder Method)
+
+Office 2019/2016 requires a **Trusted Catalog** instead of direct upload:
+
+#### Step 1: Create a Shared Folder Catalog
+
+1. Create a folder on your computer, e.g., `C:\OfficeAddins`
+2. Share the folder:
+   - Right-click → **Properties** → **Sharing** tab
+   - Click **Share...** → Add **Everyone** with **Read** permissions
+   - Note the network path (e.g., `\\YOUR-PC-NAME\OfficeAddins`)
+
+#### Step 2: Add as Trusted Catalog
+
+1. Open Word → **File** → **Options** → **Trust Center**
+2. Click **Trust Center Settings...** → **Trusted Add-in Catalogs**
+3. In **Catalog Url**, enter your shared folder path: `\\YOUR-PC-NAME\OfficeAddins`
+4. Click **Add catalog** → Check **Show in Menu** checkbox
+5. Click **OK** → **OK** again
+6. **Restart Word**
+
+#### Step 3: Install the Add-in
+
+1. Download `manifest.xml` from `https://lancedesk.github.io/ms-office-ai-helper/manifest.xml`
+2. Copy `manifest.xml` to your shared folder (`C:\OfficeAddins`)
+3. Open Word → **Insert** → **My Add-ins** → **SHARED FOLDER** tab
+4. Select **AI Helper** → Click **Add**
+
+### Word Online
+
+1. Go to Word Online at [office.com](https://www.office.com)
+2. Open a document
+3. **Insert** → **Add-ins** → **Upload Add-in**
+4. Upload `manifest.xml`
+
+## �🔧 Troubleshooting
 
 ### SSL Certificate Issues (Local Development)
 
