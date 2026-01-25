@@ -1,0 +1,1 @@
+Office.onReady(function(){console.log("Commands ready")});

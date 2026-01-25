@@ -1,1 +1,0 @@
-Office.onReady(()=>{console.log("Commands ready")});
