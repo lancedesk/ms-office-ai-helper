@@ -285,6 +285,126 @@ class DocumentService {
   }
 
   /**
+   * Format selected text with specified styles
+   * @param {Object} options - Formatting options (bold, italic, underline, color, alignment)
+   * @returns {Promise<void>}
+   */
+  async formatSelection(options) {
+    return new Promise(function(resolve, reject) {
+      Word.run(function(context) {
+        var range = context.document.getSelection();
+        range.load("text");
+        
+        return context.sync().then(function() {
+          if (!range.text || range.text.trim().length === 0) {
+            reject(new Error("No text selected"));
+            return;
+          }
+          
+          var font = range.font;
+          
+          if (options.bold !== undefined) {
+            font.bold = options.bold;
+          }
+          if (options.italic !== undefined) {
+            font.italic = options.italic;
+          }
+          if (options.underline !== undefined) {
+            font.underline = options.underline ? "Single" : "None";
+          }
+          if (options.color) {
+            font.color = options.color;
+          }
+          if (options.size) {
+            font.size = options.size;
+          }
+          if (options.highlightColor) {
+            font.highlightColor = options.highlightColor;
+          }
+          
+          return context.sync();
+        }).then(function() {
+          resolve();
+        });
+      }).catch(reject);
+    });
+  }
+
+  /**
+   * Set paragraph alignment for selection
+   * @param {string} alignment - "Left", "Center", "Right", "Justified"
+   * @returns {Promise<void>}
+   */
+  async setAlignment(alignment) {
+    return new Promise(function(resolve, reject) {
+      Word.run(function(context) {
+        var range = context.document.getSelection();
+        var paragraphs = range.paragraphs;
+        paragraphs.load("items");
+        
+        return context.sync().then(function() {
+          for (var i = 0; i < paragraphs.items.length; i++) {
+            paragraphs.items[i].alignment = alignment;
+          }
+          return context.sync();
+        }).then(function() {
+          resolve();
+        });
+      }).catch(reject);
+    });
+  }
+
+  /**
+   * Apply heading style to selection
+   * @param {number} level - Heading level (1-6)
+   * @returns {Promise<void>}
+   */
+  async applyHeading(level) {
+    return new Promise(function(resolve, reject) {
+      Word.run(function(context) {
+        var range = context.document.getSelection();
+        var paragraphs = range.paragraphs;
+        paragraphs.load("items");
+        
+        return context.sync().then(function() {
+          var styleName = level === 0 ? "Normal" : "Heading " + level;
+          for (var i = 0; i < paragraphs.items.length; i++) {
+            paragraphs.items[i].style = styleName;
+          }
+          return context.sync();
+        }).then(function() {
+          resolve();
+        });
+      }).catch(reject);
+    });
+  }
+
+  /**
+   * Search and replace text in document
+   * @param {string} searchText - Text to find
+   * @param {string} replaceText - Text to replace with
+   * @returns {Promise<number>} Number of replacements made
+   */
+  async searchAndReplace(searchText, replaceText) {
+    return new Promise(function(resolve, reject) {
+      Word.run(function(context) {
+        var results = context.document.body.search(searchText, { matchCase: false });
+        results.load("items");
+        
+        return context.sync().then(function() {
+          var count = results.items.length;
+          for (var i = 0; i < results.items.length; i++) {
+            results.items[i].insertText(replaceText, "Replace");
+          }
+          return context.sync().then(function() {
+            resolve(count);
+          });
+        });
+      }).catch(reject);
+    });
+  }
+
+  /**
    * Analyze document and provide insights
    * @returns {Promise<Object>} Document analysis
    */

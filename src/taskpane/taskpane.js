@@ -264,11 +264,18 @@ async function sendMessage() {
   const message = messageInput.value.trim();
   if (!message) return;
 
-  // Check for special commands first
+  // Check for special commands first (starting with /)
   if (message.startsWith('/')) {
     messageInput.value = "";
     const handled = await handleSpecialCommand(message);
     if (handled) return;
+  }
+  
+  // Check for natural language formatting commands (e.g., "make it bold")
+  const formattingHandled = await handleNaturalFormattingCommand(message);
+  if (formattingHandled) {
+    messageInput.value = "";
+    return;
   }
 
   // Check if API key is configured for selected provider
@@ -466,16 +473,161 @@ async function handleSpecialCommand(message) {
   
   if (command === '/help') {
     const helpText = `🤖 **AI Helper Commands**\n\n` +
-      `**Special Commands:**\n` +
+      `**Formatting Commands (select text first):**\n` +
+      `• /bold - Make selection bold\n` +
+      `• /italic - Make selection italic\n` +
+      `• /underline - Underline selection\n` +
+      `• /center - Center align selection\n` +
+      `• /left - Left align selection\n` +
+      `• /right - Right align selection\n` +
+      `• /h1, /h2, /h3 - Apply heading styles\n\n` +
+      `**Document Commands:**\n` +
       `• /analyze or /stats - Get document statistics\n` +
       `• /help - Show this help message\n\n` +
       `**Natural Commands:**\n` +
-      `• "Summarize my document" - Get a summary\n` +
-      `• "What's this about?" - Understand content\n` +
-      `• "Improve this paragraph" - Get suggestions\n` +
-      `• "Format this document" - Formatting help\n\n` +
-      `Just chat naturally - I'll understand!`;
+      `• "make it bold and italic" - Format selection\n` +
+      `• "center this" - Center selected text\n` +
+      `• "Summarize my document" - Get a summary\n\n` +
+      `💡 **Tip:** Select text in your document, then tell me how to format it!`;
     addAssistantMessage(helpText);
+    return true;
+  }
+  
+  // Formatting commands - require text selection
+  if (command === '/bold') {
+    return await applyFormatting({ bold: true }, "bold");
+  }
+  if (command === '/italic') {
+    return await applyFormatting({ italic: true }, "italic");
+  }
+  if (command === '/underline') {
+    return await applyFormatting({ underline: true }, "underlined");
+  }
+  if (command === '/center') {
+    return await applyAlignment("Center", "centered");
+  }
+  if (command === '/left') {
+    return await applyAlignment("Left", "left-aligned");
+  }
+  if (command === '/right') {
+    return await applyAlignment("Right", "right-aligned");
+  }
+  if (command === '/h1') {
+    return await applyHeadingStyle(1);
+  }
+  if (command === '/h2') {
+    return await applyHeadingStyle(2);
+  }
+  if (command === '/h3') {
+    return await applyHeadingStyle(3);
+  }
+  
+  return false;
+}
+
+/**
+ * Apply formatting to selected text
+ */
+async function applyFormatting(options, description) {
+  try {
+    await documentService.formatSelection(options);
+    addAssistantMessage("✅ Done! Made the selected text " + description + ".");
+    return true;
+  } catch (error) {
+    if (error.message.includes("No text selected")) {
+      addAssistantMessage("⚠️ Please select some text in your document first, then try again.");
+    } else {
+      addAssistantMessage("❌ Error: " + error.message);
+    }
+    return true;
+  }
+}
+
+/**
+ * Apply alignment to selected paragraphs
+ */
+async function applyAlignment(alignment, description) {
+  try {
+    await documentService.setAlignment(alignment);
+    addAssistantMessage("✅ Done! Text is now " + description + ".");
+    return true;
+  } catch (error) {
+    addAssistantMessage("❌ Error: " + error.message);
+    return true;
+  }
+}
+
+/**
+ * Apply heading style to selected text
+ */
+async function applyHeadingStyle(level) {
+  try {
+    await documentService.applyHeading(level);
+    addAssistantMessage("✅ Done! Applied Heading " + level + " style.");
+    return true;
+  } catch (error) {
+    addAssistantMessage("❌ Error: " + error.message);
+    return true;
+  }
+}
+
+/**
+ * Check if message contains formatting intent and execute it
+ */
+async function handleNaturalFormattingCommand(message) {
+  var lowerMessage = message.toLowerCase();
+  
+  // Check for formatting keywords
+  var wantsBold = /\b(bold|make it bold|bold it)\b/.test(lowerMessage);
+  var wantsItalic = /\b(italic|italics|italicize|make it italic)\b/.test(lowerMessage);
+  var wantsUnderline = /\b(underline|underlined)\b/.test(lowerMessage);
+  var wantsCenter = /\b(center|centered|centre|centred)\b/.test(lowerMessage);
+  var wantsLeft = /\b(left align|align left|left-align)\b/.test(lowerMessage);
+  var wantsRight = /\b(right align|align right|right-align)\b/.test(lowerMessage);
+  
+  // If no formatting intent detected, return false
+  if (!wantsBold && !wantsItalic && !wantsUnderline && !wantsCenter && !wantsLeft && !wantsRight) {
+    return false;
+  }
+  
+  // Check if there's selected text
+  try {
+    var hasSelection = await documentService.hasSelection();
+    if (!hasSelection) {
+      addAssistantMessage("⚠️ Please select some text in your document first, then tell me how to format it.");
+      return true;
+    }
+    
+    var applied = [];
+    
+    // Apply formatting
+    if (wantsBold || wantsItalic || wantsUnderline) {
+      var formatOptions = {};
+      if (wantsBold) { formatOptions.bold = true; applied.push("bold"); }
+      if (wantsItalic) { formatOptions.italic = true; applied.push("italic"); }
+      if (wantsUnderline) { formatOptions.underline = true; applied.push("underlined"); }
+      
+      await documentService.formatSelection(formatOptions);
+    }
+    
+    // Apply alignment
+    if (wantsCenter) {
+      await documentService.setAlignment("Center");
+      applied.push("centered");
+    } else if (wantsLeft) {
+      await documentService.setAlignment("Left");
+      applied.push("left-aligned");
+    } else if (wantsRight) {
+      await documentService.setAlignment("Right");
+      applied.push("right-aligned");
+    }
+    
+    if (applied.length > 0) {
+      addAssistantMessage("✅ Done! Made the selected text " + applied.join(", ") + ".");
+      return true;
+    }
+  } catch (error) {
+    addAssistantMessage("❌ Error applying formatting: " + error.message);
     return true;
   }
   
