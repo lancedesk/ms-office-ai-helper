@@ -365,8 +365,11 @@ async function sendMessage() {
     
     hideLoading();
     
-    // Add AI response to chat
-    addAssistantMessage(response);
+    // Check for and execute any action commands in the response
+    var processedResponse = await parseAndExecuteActions(response);
+    
+    // Add AI response to chat (with action tags removed)
+    addAssistantMessage(processedResponse);
     
     // Add to chat history
     chatHistory.push({ role: 'assistant', content: response });
@@ -407,25 +410,38 @@ function shouldIncludeDocumentContext(message) {
  * @returns {string} System context prompt
  */
 function buildSystemContext() {
-  return `You are an intelligent AI assistant integrated into Microsoft Word. Your capabilities include:
+  return `You are an intelligent AI assistant integrated into Microsoft Word with the ability to DIRECTLY EDIT the document.
 
-1. **Document Analysis**: Read and understand document content, provide summaries and insights
-2. **Editing Assistance**: Help with formatting, structure, grammar, and style improvements
-3. **Content Generation**: Create or expand text based on user requests
-4. **Q&A**: Answer questions about the document or general topics
+## Your Capabilities:
+1. **Read & Analyze**: Read document content, provide summaries, answer questions
+2. **Format Text**: Apply bold, italic, underline, alignment, headings
+3. **Find & Edit**: Search for specific text and modify it
+4. **Generate Content**: Create or expand text
 
-Guidelines:
-- Be concise and helpful
-- When discussing document content, be specific and reference actual text
-- Suggest actionable improvements when asked
-- If you don't have document context but user asks about it, let them know
-- Be professional yet friendly
+## IMPORTANT - Action Commands:
+When the user asks you to FORMAT, EDIT, or MODIFY the document, you MUST include an ACTION command in your response using this exact format:
 
-Current capabilities ready:
-- Reading document content
-- Providing summaries
-- Answering questions
-- General assistance`;
+[ACTION: FORMAT target="text to find or 'first heading'" bold=true italic=true underline=true center=true]
+
+Examples:
+- User: "make the first heading bold" → Include: [ACTION: FORMAT target="first heading" bold=true]
+- User: "center the title and make it italic" → Include: [ACTION: FORMAT target="first heading" italic=true center=true]
+- User: "make 'What is Android?' bold and underline" → Include: [ACTION: FORMAT target="What is Android?" bold=true underline=true]
+- User: "underline the heading" → Include: [ACTION: FORMAT target="first heading" underline=true]
+
+## Formatting Options:
+- bold=true/false
+- italic=true/false  
+- underline=true/false
+- center=true (centers the text)
+- left=true (left align)
+- right=true (right align)
+
+## Guidelines:
+- ALWAYS include an [ACTION:...] command when user wants document changes
+- Be concise - confirm what you did in 1-2 sentences
+- If you don't know what text to target, ask the user
+- For general questions (not edits), just respond normally without action commands`;
 }
 
 /**
@@ -567,6 +583,81 @@ async function applyHeadingStyle(level) {
     addAssistantMessage("❌ Error: " + error.message);
     return true;
   }
+}
+
+/**
+ * Parse AI response for action commands and execute them
+ * @param {string} response - AI response text
+ * @returns {string} Response with action tags removed
+ */
+async function parseAndExecuteActions(response) {
+  // Look for [ACTION: FORMAT ...] pattern
+  var actionRegex = /\[ACTION:\s*FORMAT\s+([^\]]+)\]/gi;
+  var match = actionRegex.exec(response);
+  
+  if (!match) {
+    return response; // No action found, return as-is
+  }
+  
+  var actionParams = match[1];
+  
+  // Parse parameters
+  var targetMatch = actionParams.match(/target\s*=\s*["']([^"']+)["']/i);
+  var target = targetMatch ? targetMatch[1] : null;
+  
+  var wantsBold = /bold\s*=\s*true/i.test(actionParams);
+  var wantsItalic = /italic\s*=\s*true/i.test(actionParams);
+  var wantsUnderline = /underline\s*=\s*true/i.test(actionParams);
+  var wantsCenter = /center\s*=\s*true/i.test(actionParams);
+  var wantsLeft = /left\s*=\s*true/i.test(actionParams);
+  var wantsRight = /right\s*=\s*true/i.test(actionParams);
+  
+  if (!target) {
+    console.warn("ACTION found but no target specified");
+    return response.replace(actionRegex, '').trim();
+  }
+  
+  try {
+    var isHeadingTarget = /first heading|the heading|title|the title/i.test(target);
+    
+    if (isHeadingTarget) {
+      // Format first heading
+      var formatOptions = {};
+      if (wantsBold) formatOptions.bold = true;
+      if (wantsItalic) formatOptions.italic = true;
+      if (wantsUnderline) formatOptions.underline = true;
+      
+      if (Object.keys(formatOptions).length > 0) {
+        await documentService.formatFirstHeading(formatOptions);
+      }
+      
+      if (wantsCenter) {
+        await documentService.alignFirstHeading("Center");
+      } else if (wantsLeft) {
+        await documentService.alignFirstHeading("Left");
+      } else if (wantsRight) {
+        await documentService.alignFirstHeading("Right");
+      }
+    } else {
+      // Format specific text
+      var formatOptions = {};
+      if (wantsBold) formatOptions.bold = true;
+      if (wantsItalic) formatOptions.italic = true;
+      if (wantsUnderline) formatOptions.underline = true;
+      
+      if (Object.keys(formatOptions).length > 0) {
+        await documentService.formatText(target, formatOptions);
+      }
+    }
+    
+    console.log("Action executed successfully for target:", target);
+  } catch (error) {
+    console.error("Error executing action:", error);
+    // Don't fail - just return the response without the action tag
+  }
+  
+  // Remove the action tag from the response shown to user
+  return response.replace(actionRegex, '').trim();
 }
 
 /**
