@@ -209,15 +209,40 @@ function addUserMessage(text) {
 function addAssistantMessage(text) {
   initializeElements();
   
-  const messageDiv = document.createElement("div");
+  var msgId = generateMessageId();
+  var messageDiv = document.createElement("div");
   messageDiv.className = "message assistant";
-  messageDiv.innerHTML = `
-    <div class="message-avatar">AI</div>
-    <div class="message-content">${escapeHtml(text)}</div>
-  `;
+  messageDiv.id = msgId;
+  
+  // Store raw text for copying
+  messageDiv.setAttribute('data-raw-text', text);
+  
+  var contentHtml = parseMarkdown(text);
+  
+  messageDiv.innerHTML = 
+    '<div class="message-avatar">AI</div>' +
+    '<div class="message-content-wrapper">' +
+      '<div class="message-content markdown-content">' + contentHtml + '</div>' +
+      '<div class="message-actions">' +
+        '<button class="copy-btn" onclick="copyMessageContent(\'' + msgId + '\')" title="Copy to clipboard">📋 Copy</button>' +
+      '</div>' +
+    '</div>';
+  
   chatContainer.appendChild(messageDiv);
   scrollToBottom();
 }
+
+// Global function for copy button click
+window.copyMessageContent = function(msgId) {
+  var msgDiv = document.getElementById(msgId);
+  if (msgDiv) {
+    var rawText = msgDiv.getAttribute('data-raw-text');
+    var copyBtn = msgDiv.querySelector('.copy-btn');
+    if (rawText && copyBtn) {
+      copyToClipboard(rawText, copyBtn);
+    }
+  }
+};
 
 function showLoading() {
   initializeElements();
@@ -256,6 +281,173 @@ function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML;
+}
+
+/**
+ * Simple markdown parser - converts markdown to HTML
+ * Handles: bold, italic, headings, lists, code blocks, line breaks
+ */
+function parseMarkdown(text) {
+  if (!text) return '';
+  
+  // First escape HTML to prevent XSS, but preserve structure
+  var lines = text.split('\n');
+  var result = [];
+  var inCodeBlock = false;
+  var inList = false;
+  var listType = null;
+  
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    
+    // Code blocks
+    if (line.trim().indexOf('```') === 0) {
+      if (inCodeBlock) {
+        result.push('</code></pre>');
+        inCodeBlock = false;
+      } else {
+        if (inList) {
+          result.push(listType === 'ol' ? '</ol>' : '</ul>');
+          inList = false;
+        }
+        result.push('<pre><code>');
+        inCodeBlock = true;
+      }
+      continue;
+    }
+    
+    if (inCodeBlock) {
+      result.push(escapeHtml(line));
+      continue;
+    }
+    
+    // Process inline formatting
+    var processed = escapeHtml(line);
+    
+    // Bold **text** or __text__
+    processed = processed.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    processed = processed.replace(/__(.+?)__/g, '<strong>$1</strong>');
+    
+    // Italic *text* or _text_
+    processed = processed.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    processed = processed.replace(/_([^_]+)_/g, '<em>$1</em>');
+    
+    // Inline code `code`
+    processed = processed.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
+    
+    // Headings
+    if (processed.match(/^#{1,6}\s/)) {
+      if (inList) {
+        result.push(listType === 'ol' ? '</ol>' : '</ul>');
+        inList = false;
+      }
+      var level = processed.match(/^(#+)/)[1].length;
+      var headingText = processed.replace(/^#+\s*/, '');
+      result.push('<h' + (level + 2) + ' class="md-heading">' + headingText + '</h' + (level + 2) + '>');
+      continue;
+    }
+    
+    // Unordered list items (• or - or *)
+    var unorderedMatch = processed.match(/^[\s]*[-•*]\s+(.+)$/);
+    if (unorderedMatch) {
+      if (!inList || listType !== 'ul') {
+        if (inList) result.push('</ol>');
+        result.push('<ul class="md-list">');
+        inList = true;
+        listType = 'ul';
+      }
+      result.push('<li>' + unorderedMatch[1] + '</li>');
+      continue;
+    }
+    
+    // Ordered list items (1. 2. etc)
+    var orderedMatch = processed.match(/^[\s]*(\d+)\.\s+(.+)$/);
+    if (orderedMatch) {
+      if (!inList || listType !== 'ol') {
+        if (inList) result.push('</ul>');
+        result.push('<ol class="md-list">');
+        inList = true;
+        listType = 'ol';
+      }
+      result.push('<li>' + orderedMatch[2] + '</li>');
+      continue;
+    }
+    
+    // Close list if line doesn't continue it
+    if (inList && processed.trim() !== '') {
+      result.push(listType === 'ol' ? '</ol>' : '</ul>');
+      inList = false;
+    }
+    
+    // Empty line
+    if (processed.trim() === '') {
+      if (inList) {
+        result.push(listType === 'ol' ? '</ol>' : '</ul>');
+        inList = false;
+      }
+      result.push('<br>');
+      continue;
+    }
+    
+    // Regular paragraph
+    result.push('<p class="md-paragraph">' + processed + '</p>');
+  }
+  
+  // Close any open tags
+  if (inCodeBlock) result.push('</code></pre>');
+  if (inList) result.push(listType === 'ol' ? '</ol>' : '</ul>');
+  
+  return result.join('\n');
+}
+
+/**
+ * Generate unique ID for messages
+ */
+var messageIdCounter = 0;
+function generateMessageId() {
+  return 'msg-' + (++messageIdCounter) + '-' + Date.now();
+}
+
+/**
+ * Copy text to clipboard
+ */
+function copyToClipboard(text, buttonElement) {
+  // Try modern clipboard API first
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() {
+      showCopySuccess(buttonElement);
+    }).catch(function() {
+      fallbackCopyToClipboard(text, buttonElement);
+    });
+  } else {
+    fallbackCopyToClipboard(text, buttonElement);
+  }
+}
+
+function fallbackCopyToClipboard(text, buttonElement) {
+  var textArea = document.createElement('textarea');
+  textArea.value = text;
+  textArea.style.position = 'fixed';
+  textArea.style.left = '-9999px';
+  document.body.appendChild(textArea);
+  textArea.select();
+  try {
+    document.execCommand('copy');
+    showCopySuccess(buttonElement);
+  } catch (err) {
+    console.error('Failed to copy:', err);
+  }
+  document.body.removeChild(textArea);
+}
+
+function showCopySuccess(buttonElement) {
+  var originalText = buttonElement.innerHTML;
+  buttonElement.innerHTML = '✓ Copied!';
+  buttonElement.classList.add('copied');
+  setTimeout(function() {
+    buttonElement.innerHTML = originalText;
+    buttonElement.classList.remove('copied');
+  }, 2000);
 }
 
 async function sendMessage() {
@@ -417,17 +609,26 @@ function buildSystemContext() {
 2. **Format Text**: Apply bold, italic, underline, alignment, headings
 3. **Find & Edit**: Search for specific text and modify it
 4. **Generate Content**: Create or expand text
+5. **Insert Content**: Add summaries, new sections, or generated content to the document
 
 ## IMPORTANT - Action Commands:
-When the user asks you to FORMAT, EDIT, or MODIFY the document, you MUST include an ACTION command in your response using this exact format:
+When the user asks you to FORMAT, EDIT, or MODIFY the document, you MUST include an ACTION command in your response.
 
+### FORMAT Action (for styling existing text):
 [ACTION: FORMAT target="text to find or 'first heading'" bold=true italic=true underline=true center=true]
 
 Examples:
 - User: "make the first heading bold" → Include: [ACTION: FORMAT target="first heading" bold=true]
 - User: "center the title and make it italic" → Include: [ACTION: FORMAT target="first heading" italic=true center=true]
 - User: "make 'What is Android?' bold and underline" → Include: [ACTION: FORMAT target="What is Android?" bold=true underline=true]
-- User: "underline the heading" → Include: [ACTION: FORMAT target="first heading" underline=true]
+
+### INSERT Action (for adding new content to document):
+[ACTION: INSERT heading="Section Title" content="The content to insert..." newpage=true]
+
+Examples:
+- User: "summarize this document and add the summary to it" → First provide summary, then: [ACTION: INSERT heading="Summary" content="Your summary text here..." newpage=true]
+- User: "add a conclusion" → [ACTION: INSERT heading="Conclusion" content="Your generated conclusion..." newpage=false]
+- User: "create a new document with this summary" → [ACTION: INSERT heading="Document Summary" content="..." newpage=true]
 
 ## Formatting Options:
 - bold=true/false
@@ -437,8 +638,14 @@ Examples:
 - left=true (left align)
 - right=true (right align)
 
+## INSERT Options:
+- heading="Title" (optional - adds a heading)
+- content="..." (the actual text content to insert)
+- newpage=true/false (whether to start on new page, default true)
+
 ## Guidelines:
 - ALWAYS include an [ACTION:...] command when user wants document changes
+- For summaries that should be ADDED to the document, use INSERT action
 - Be concise - confirm what you did in 1-2 sentences
 - If you don't know what text to target, ask the user
 - For general questions (not edits), just respond normally without action commands`;
@@ -591,73 +798,108 @@ async function applyHeadingStyle(level) {
  * @returns {string} Response with action tags removed
  */
 async function parseAndExecuteActions(response) {
-  // Look for [ACTION: FORMAT ...] pattern
-  var actionRegex = /\[ACTION:\s*FORMAT\s+([^\]]+)\]/gi;
-  var match = actionRegex.exec(response);
+  var cleanedResponse = response;
   
-  if (!match) {
-    return response; // No action found, return as-is
-  }
+  // Handle FORMAT action
+  var formatRegex = /\[ACTION:\s*FORMAT\s+([^\]]+)\]/gi;
+  var formatMatch = formatRegex.exec(response);
   
-  var actionParams = match[1];
-  
-  // Parse parameters
-  var targetMatch = actionParams.match(/target\s*=\s*["']([^"']+)["']/i);
-  var target = targetMatch ? targetMatch[1] : null;
-  
-  var wantsBold = /bold\s*=\s*true/i.test(actionParams);
-  var wantsItalic = /italic\s*=\s*true/i.test(actionParams);
-  var wantsUnderline = /underline\s*=\s*true/i.test(actionParams);
-  var wantsCenter = /center\s*=\s*true/i.test(actionParams);
-  var wantsLeft = /left\s*=\s*true/i.test(actionParams);
-  var wantsRight = /right\s*=\s*true/i.test(actionParams);
-  
-  if (!target) {
-    console.warn("ACTION found but no target specified");
-    return response.replace(actionRegex, '').trim();
-  }
-  
-  try {
-    var isHeadingTarget = /first heading|the heading|title|the title/i.test(target);
+  if (formatMatch) {
+    var actionParams = formatMatch[1];
     
-    if (isHeadingTarget) {
-      // Format first heading
-      var formatOptions = {};
-      if (wantsBold) formatOptions.bold = true;
-      if (wantsItalic) formatOptions.italic = true;
-      if (wantsUnderline) formatOptions.underline = true;
-      
-      if (Object.keys(formatOptions).length > 0) {
-        await documentService.formatFirstHeading(formatOptions);
-      }
-      
-      if (wantsCenter) {
-        await documentService.alignFirstHeading("Center");
-      } else if (wantsLeft) {
-        await documentService.alignFirstHeading("Left");
-      } else if (wantsRight) {
-        await documentService.alignFirstHeading("Right");
-      }
-    } else {
-      // Format specific text
-      var formatOptions = {};
-      if (wantsBold) formatOptions.bold = true;
-      if (wantsItalic) formatOptions.italic = true;
-      if (wantsUnderline) formatOptions.underline = true;
-      
-      if (Object.keys(formatOptions).length > 0) {
-        await documentService.formatText(target, formatOptions);
+    // Parse parameters
+    var targetMatch = actionParams.match(/target\s*=\s*["']([^"']+)["']/i);
+    var target = targetMatch ? targetMatch[1] : null;
+    
+    var wantsBold = /bold\s*=\s*true/i.test(actionParams);
+    var wantsItalic = /italic\s*=\s*true/i.test(actionParams);
+    var wantsUnderline = /underline\s*=\s*true/i.test(actionParams);
+    var wantsCenter = /center\s*=\s*true/i.test(actionParams);
+    var wantsLeft = /left\s*=\s*true/i.test(actionParams);
+    var wantsRight = /right\s*=\s*true/i.test(actionParams);
+    
+    if (target) {
+      try {
+        var isHeadingTarget = /first heading|the heading|title|the title/i.test(target);
+        
+        if (isHeadingTarget) {
+          // Format first heading
+          var formatOptions = {};
+          if (wantsBold) formatOptions.bold = true;
+          if (wantsItalic) formatOptions.italic = true;
+          if (wantsUnderline) formatOptions.underline = true;
+          
+          if (Object.keys(formatOptions).length > 0) {
+            await documentService.formatFirstHeading(formatOptions);
+          }
+          
+          if (wantsCenter) {
+            await documentService.alignFirstHeading("Center");
+          } else if (wantsLeft) {
+            await documentService.alignFirstHeading("Left");
+          } else if (wantsRight) {
+            await documentService.alignFirstHeading("Right");
+          }
+        } else {
+          // Format specific text
+          var formatOptions = {};
+          if (wantsBold) formatOptions.bold = true;
+          if (wantsItalic) formatOptions.italic = true;
+          if (wantsUnderline) formatOptions.underline = true;
+          
+          if (Object.keys(formatOptions).length > 0) {
+            await documentService.formatText(target, formatOptions);
+          }
+        }
+        
+        console.log("FORMAT action executed successfully for target:", target);
+      } catch (error) {
+        console.error("Error executing FORMAT action:", error);
       }
     }
     
-    console.log("Action executed successfully for target:", target);
-  } catch (error) {
-    console.error("Error executing action:", error);
-    // Don't fail - just return the response without the action tag
+    cleanedResponse = cleanedResponse.replace(formatRegex, '').trim();
   }
   
-  // Remove the action tag from the response shown to user
-  return response.replace(actionRegex, '').trim();
+  // Handle INSERT action
+  var insertRegex = /\[ACTION:\s*INSERT\s+([^\]]+)\]/gi;
+  var insertMatch = insertRegex.exec(response);
+  
+  if (insertMatch) {
+    var insertParams = insertMatch[1];
+    
+    // Parse parameters - handle multiline content
+    var headingMatch = insertParams.match(/heading\s*=\s*["']([^"']+)["']/i);
+    var heading = headingMatch ? headingMatch[1] : null;
+    
+    // Content can be multiline, so we need special handling
+    var contentMatch = insertParams.match(/content\s*=\s*["'](.+?)["']\s*(?:newpage|$)/is);
+    var content = contentMatch ? contentMatch[1] : null;
+    
+    var newPage = /newpage\s*=\s*true/i.test(insertParams);
+    // Default to true if not specified
+    if (!/newpage\s*=/i.test(insertParams)) {
+      newPage = true;
+    }
+    
+    if (content) {
+      try {
+        // Clean up content - replace escaped newlines with actual newlines
+        content = content.replace(/\\n/g, '\n').trim();
+        
+        await documentService.insertContentSection(heading, content, newPage);
+        console.log("INSERT action executed successfully");
+      } catch (error) {
+        console.error("Error executing INSERT action:", error);
+      }
+    } else {
+      console.warn("INSERT action found but no content specified");
+    }
+    
+    cleanedResponse = cleanedResponse.replace(insertRegex, '').trim();
+  }
+  
+  return cleanedResponse;
 }
 
 /**

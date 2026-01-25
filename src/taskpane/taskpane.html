@@ -496,6 +496,110 @@
             font-size: 14px;
             font-weight: 600;
         }
+
+        /* Markdown content styles */
+        .markdown-content {
+            line-height: 1.5;
+        }
+
+        .markdown-content .md-heading {
+            margin: 8px 0 4px 0;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .markdown-content h3.md-heading {
+            font-size: 15px;
+        }
+
+        .markdown-content h4.md-heading {
+            font-size: 14px;
+        }
+
+        .markdown-content h5.md-heading {
+            font-size: 13px;
+        }
+
+        .markdown-content .md-paragraph {
+            margin: 4px 0;
+        }
+
+        .markdown-content .md-list {
+            margin: 6px 0 6px 20px;
+            padding: 0;
+        }
+
+        .markdown-content .md-list li {
+            margin: 3px 0;
+        }
+
+        .markdown-content strong {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .markdown-content em {
+            font-style: italic;
+        }
+
+        .markdown-content pre {
+            background: #f4f4f4;
+            border-radius: 4px;
+            padding: 8px;
+            margin: 8px 0;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+
+        .markdown-content code {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .markdown-content .inline-code {
+            background: #f0f0f0;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+
+        /* Message wrapper for copy button */
+        .message-content-wrapper {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px solid #eee;
+        }
+
+        .copy-btn {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 4px 10px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #666;
+        }
+
+        .copy-btn:hover {
+            background: #e8e8e8;
+            color: #333;
+        }
+
+        .copy-btn.copied {
+            background: #4caf50;
+            color: white;
+            border-color: #4caf50;
+        }
     </style>
 </head>
 

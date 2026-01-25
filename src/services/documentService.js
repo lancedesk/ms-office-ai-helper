@@ -630,6 +630,106 @@ class DocumentService {
       throw error;
     }
   }
+
+  /**
+   * Insert text at the end of the document
+   * @param {string} text - The text content to insert
+   * @param {boolean} addPageBreak - Whether to add a page break before the content
+   * @returns {Promise<boolean>} Success status
+   */
+  async insertTextAtEnd(text, addPageBreak) {
+    if (addPageBreak === undefined) addPageBreak = false;
+    
+    return new Promise(function(resolve, reject) {
+      Word.run(function(context) {
+        var body = context.document.body;
+        
+        // Add page break if requested
+        if (addPageBreak) {
+          body.insertBreak(Word.BreakType.page, Word.InsertLocation.end);
+        }
+        
+        // Insert the text at the end
+        body.insertText(text, Word.InsertLocation.end);
+        
+        return context.sync().then(function() {
+          resolve(true);
+        });
+      }).catch(function(error) {
+        console.error("Error inserting text:", error);
+        reject(error);
+      });
+    });
+  }
+
+  /**
+   * Insert content with optional heading at end of document
+   * @param {string} heading - Optional heading text
+   * @param {string} content - The content to insert
+   * @param {boolean} newPage - Whether to start on a new page
+   * @returns {Promise<boolean>} Success status
+   */
+  async insertContentSection(heading, content, newPage) {
+    if (newPage === undefined) newPage = true;
+    
+    return new Promise(function(resolve, reject) {
+      Word.run(function(context) {
+        var body = context.document.body;
+        
+        // Add page break for new section
+        if (newPage) {
+          body.insertBreak(Word.BreakType.page, Word.InsertLocation.end);
+        }
+        
+        // Add heading if provided
+        if (heading) {
+          var headingPara = body.insertParagraph(heading, Word.InsertLocation.end);
+          headingPara.styleBuiltIn = Word.Style.heading1;
+        }
+        
+        // Add content paragraphs
+        var paragraphs = content.split('\n\n');
+        paragraphs.forEach(function(para) {
+          if (para.trim()) {
+            body.insertParagraph(para.trim(), Word.InsertLocation.end);
+          }
+        });
+        
+        return context.sync().then(function() {
+          resolve(true);
+        });
+      }).catch(function(error) {
+        console.error("Error inserting content section:", error);
+        reject(error);
+      });
+    });
+  }
+
+  /**
+   * Replace entire document content (essentially creating a "new" document)
+   * @param {string} content - The new content
+   * @returns {Promise<boolean>} Success status
+   */
+  async replaceDocumentContent(content) {
+    return new Promise(function(resolve, reject) {
+      Word.run(function(context) {
+        var body = context.document.body;
+        
+        // Clear existing content
+        body.clear();
+        
+        // Insert new content
+        body.insertText(content, Word.InsertLocation.start);
+        
+        return context.sync().then(function() {
+          resolve(true);
+        });
+      }).catch(function(error) {
+        console.error("Error replacing document content:", error);
+        reject(error);
+      });
+    });
+  }
 }
 
 // Export for use in other files
