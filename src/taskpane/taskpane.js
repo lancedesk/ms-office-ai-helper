@@ -596,50 +596,32 @@ function buildSystemContext() {
 
 CRITICAL: You MUST use ACTION commands to change the document. Just typing text does NOTHING.
 
-## REPLACE - Reformat entire document
+## REPLACE - Reformat document
 Use when user asks to fix formatting, correct document, reformat, etc.
 
-IMPORTANT: PRESERVE ALL ORIGINAL CONTENT. Do not summarize or remove sections!
-
+FORMAT:
 [ACTION: REPLACE]
 ---CONTENT START---
 # Main Title
 
-First paragraph with all original text preserved.
-
-## Section Heading
-
-All content from original section here.
-
-- Bullet point 1
-- Bullet point 2
-
-| Column1 | Column2 | Column3 |
-| Data1 | Data2 | Data3 |
-| Data4 | Data5 | Data6 |
-
-### Sub-section
-
-More text here.
+Content here with proper formatting...
 ---CONTENT END---
 
 FORMATTING RULES:
-- # Title = Heading 1
-- ## Section = Heading 2
-- ### Subsection = Heading 3
-- Lines with - = bullet points
-- Lines with 1. 2. = numbered lists
-- Lines with | = table rows (will become Word table)
-- PRESERVE ALL original content - do not summarize!
+- # = Heading 1
+- ## = Heading 2  
+- ### = Heading 3
+- Lines starting with - = bullet points
+- Lines with | col1 | col2 | = table rows
+- Plain text = normal paragraph
 
-## FORMAT - Bold/italic specific text (optional, after REPLACE)
+## FORMAT - Bold/italic specific text
 [ACTION: FORMAT target="first heading" bold=true]
 
-## RULES:
+## CRITICAL RULES:
 1. ALWAYS use ---CONTENT START--- and ---CONTENT END--- markers
-2. PRESERVE ALL content from the original document
-3. Tables use | pipe | format | directly in REPLACE content
-4. Do NOT summarize - include everything from the original`;
+2. Tables: use | pipe | format | in content (becomes real Word table)
+3. Keep explanations brief - just confirm the action`;
 }
 
 /**
