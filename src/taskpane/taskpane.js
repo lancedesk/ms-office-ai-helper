@@ -464,14 +464,12 @@ async function sendMessage() {
     if (handled) return;
   }
   
-  // Check for natural language formatting commands (e.g., "make it bold")
-  addUserMessage(message); // Always show user message first
+  // Show user message first
+  addUserMessage(message);
   messageInput.value = "";
   
-  const formattingHandled = await handleNaturalFormattingCommand(message);
-  if (formattingHandled) {
-    return;
-  }
+  // All requests go through AI - it interprets intent and returns structured actions
+  // No more hardcoded pattern matching!
 
   // Check if API key is configured for selected provider
   const hasGroqKey = await apiKeyManager.hasApiKey('groq');
@@ -583,17 +581,10 @@ async function sendMessage() {
  * @returns {boolean} True if document context is needed
  */
 function shouldIncludeDocumentContext(message) {
-  const keywords = [
-    'document', 'doc', 'text', 'content', 'write', 'written',
-    'read', 'reading', 'summarize', 'summary', 'analyze', 'analysis',
-    'this', 'it', 'what', 'about', 'tell me', 'explain',
-    'format', 'edit', 'change', 'modify', 'improve',
-    'paragraph', 'sentence', 'word', 'section', 'chapter',
-    'heading', 'header', 'title', 'structure'
-  ];
-  
-  const lowerMessage = message.toLowerCase();
-  return keywords.some(keyword => lowerMessage.includes(keyword));
+  // Almost always include document context - let AI decide relevance
+  // Only skip for very basic greetings
+  const skipPatterns = /^(hi|hello|hey|thanks|thank you|ok|okay|yes|no|bye)[\s!.?]*$/i;
+  return !skipPatterns.test(message.trim());
 }
 
 /**
@@ -601,59 +592,47 @@ function shouldIncludeDocumentContext(message) {
  * @returns {string} System context prompt
  */
 function buildSystemContext() {
-  return `You are an intelligent AI assistant integrated into Microsoft Word with the ability to DIRECTLY EDIT the document.
+  return `You are an AI assistant integrated into Microsoft Word. You can DIRECTLY EDIT the document using ACTION commands.
 
-## Your Capabilities:
-1. **Read & Analyze**: Read document content, provide summaries, answer questions
-2. **Format Text**: Apply bold, italic, underline, alignment, headings
-3. **Rewrite/Reformat**: Completely rewrite or reformat the document with proper structure
-4. **Insert Content**: Add new sections to the document
+## ACTION COMMANDS (you MUST use these for any document changes):
 
-## CRITICAL - You MUST Use Action Commands:
-When the user asks you to FORMAT, EDIT, REFORMAT, FIX, or MODIFY the document, you MUST include an ACTION command. DO NOT just show the corrected text - use an action to apply it!
+### FORMAT - Apply or remove formatting
+Format: [ACTION: FORMAT target="<text or 'first heading'>" bold=<true/false> italic=<true/false> underline=<true/false> center=<true/false>]
 
-### ACTION: FORMAT (style specific text)
-[ACTION: FORMAT target="text to find" bold=true italic=true underline=true center=true]
+- Use bold=true to ADD bold, bold=false to REMOVE bold
+- Use italic=true to ADD italic, italic=false to REMOVE italic  
+- Use underline=true to ADD underline, underline=false to REMOVE underline
+- target="first heading" targets the first heading/title in document
+- target="exact text" finds and formats that specific text
 
-Example: User says "make the first heading bold"
-→ You respond: "Done! I've made the heading bold. [ACTION: FORMAT target="first heading" bold=true]"
+Examples:
+- "make heading bold" → [ACTION: FORMAT target="first heading" bold=true]
+- "remove italics from title" → [ACTION: FORMAT target="first heading" italic=false]
+- "unbold and remove underline from heading" → [ACTION: FORMAT target="first heading" bold=false underline=false]
+- "make 'Android' bold" → [ACTION: FORMAT target="Android" bold=true]
 
-### ACTION: REPLACE (replace entire document with reformatted content)
-Use this when user asks to "fix formatting", "reformat the document", "correct the document", etc.
+### INSERT - Add new content
+Format: [ACTION: INSERT heading="Title" content="Your content here" newpage=true/false]
+
+Examples:
+- "add a summary" → [ACTION: INSERT heading="Summary" content="This document covers..." newpage=true]
+
+### REPLACE - Rewrite entire document
+Format:
 [ACTION: REPLACE]
 ---CONTENT START---
-Your reformatted document content here...
-Use proper structure with headings, paragraphs, lists.
+Full reformatted document content here...
 ---CONTENT END---
 
-Example: User says "fix the formatting issues in this document"
-→ You respond: "I've reformatted the document with proper headings, spacing, and structure.
-[ACTION: REPLACE]
----CONTENT START---
-What is Android?
+Use REPLACE only when user wants to completely reformat/restructure the document.
 
-Android is an open-source operating system...
-
-Features of Android
-
-• Beautiful UI - intuitive user interface
-• Connectivity - supports WiFi, Bluetooth, NFC
-...
----CONTENT END---"
-
-### ACTION: INSERT (add new content at end)
-[ACTION: INSERT heading="Section Title" content="Content here..." newpage=true]
-
-Example: User says "add a summary to the document"
-→ You respond: "I've added a summary section. [ACTION: INSERT heading="Summary" content="This document covers..." newpage=true]"
-
-## IMPORTANT RULES:
-1. ALWAYS use an ACTION command when the user wants document changes - never just show text!
-2. For "fix formatting" or "reformat" requests, use REPLACE to rewrite the whole document properly
-3. For small changes to specific text, use FORMAT
-4. For adding new content, use INSERT
-5. If you're not sure what to do, ask the user
-6. Be concise in your confirmation message`;
+## RULES:
+1. ALWAYS include an ACTION command when user wants ANY document change
+2. Understand user intent even with typos, different languages, or informal phrasing
+3. "unbold", "un-bold", "remove bold", "no bold", "取消粗体" all mean bold=false
+4. "unitalic", "remove italics", "no italic" all mean italic=false
+5. Be concise - just confirm what you did
+6. If unclear, ask for clarification`;
 }
 
 /**
@@ -946,184 +925,6 @@ async function parseAndExecuteActions(response) {
   }
   
   return cleanedResponse;
-}
-
-/**
- * Check if message contains formatting intent and execute it
- */
-async function handleNaturalFormattingCommand(message) {
-  var lowerMessage = message.toLowerCase();
-  
-  // Check if this is a REMOVE request (contains "remove" or "un-" prefix)
-  var isRemoveRequest = /\b(remove|un-?)\b/.test(lowerMessage);
-  
-  // Check for REMOVE formatting keywords
-  // Handle compound: "remove bold and underline", "remove underline and bold", etc.
-  var wantsRemoveBold = isRemoveRequest && /\b(bold)\b/.test(lowerMessage);
-  var wantsRemoveItalic = isRemoveRequest && /\b(italic|italics)\b/.test(lowerMessage);
-  var wantsRemoveUnderline = isRemoveRequest && /\b(underline|underlined)\b/.test(lowerMessage);
-  
-  // Also detect specific un- prefixes
-  if (/\b(unbold|un-bold)\b/.test(lowerMessage)) wantsRemoveBold = true;
-  if (/\b(unitalic|un-italic|unitalicize)\b/.test(lowerMessage)) wantsRemoveItalic = true;
-  if (/\b(un-?underline)\b/.test(lowerMessage)) wantsRemoveUnderline = true;
-  
-  // Check for ADD formatting keywords (only if NOT a remove request)
-  var wantsBold = !isRemoveRequest && /\b(bold|make it bold|bold it)\b/.test(lowerMessage);
-  var wantsItalic = !isRemoveRequest && /\b(italic|italics|italicize|make it italic)\b/.test(lowerMessage);
-  var wantsUnderline = !isRemoveRequest && /\b(underline|underlined)\b/.test(lowerMessage);
-  var wantsCenter = /\b(center|centered|centre|centred)\b/.test(lowerMessage);
-  var wantsLeft = /\b(left align|align left|left-align)\b/.test(lowerMessage);
-  var wantsRight = /\b(right align|align right|right-align)\b/.test(lowerMessage);
-  
-  // If no formatting intent detected, return false
-  var hasFormatIntent = wantsBold || wantsItalic || wantsUnderline || wantsCenter || wantsLeft || wantsRight;
-  var hasRemoveIntent = wantsRemoveBold || wantsRemoveItalic || wantsRemoveUnderline;
-  
-  if (!hasFormatIntent && !hasRemoveIntent) {
-    return false;
-  }
-  
-  // Check if user is referring to "first heading", "the title", "the heading", etc.
-  var refersToHeading = /\b(first heading|the heading|title|the title|first title|main heading)\b/.test(lowerMessage);
-  
-  // Check for quoted text like "make 'What is Android?' bold" or 'make "hello" italic'
-  var quotedTextMatch = message.match(/['""]([^'""]+)['""]/) || message.match(/'([^']+)'/) || message.match(/"([^"]+)"/);
-  var quotedText = quotedTextMatch ? quotedTextMatch[1] : null;
-  
-  try {
-    var applied = [];
-    var removed = [];
-    var targetDescription = "";
-    
-    // Case 1: User refers to heading/title
-    if (refersToHeading) {
-      var formatOptions = {};
-      // Add formatting
-      if (wantsBold) { formatOptions.bold = true; applied.push("bold"); }
-      if (wantsItalic) { formatOptions.italic = true; applied.push("italic"); }
-      if (wantsUnderline) { formatOptions.underline = true; applied.push("underlined"); }
-      // Remove formatting
-      if (wantsRemoveBold) { formatOptions.bold = false; removed.push("bold"); }
-      if (wantsRemoveItalic) { formatOptions.italic = false; removed.push("italics"); }
-      if (wantsRemoveUnderline) { formatOptions.underline = false; removed.push("underline"); }
-      
-      if (Object.keys(formatOptions).length > 0) {
-        var headingText = await documentService.formatFirstHeading(formatOptions);
-        targetDescription = '"' + headingText.substring(0, 30) + (headingText.length > 30 ? '...' : '') + '"';
-      }
-      
-      // Handle alignment for heading
-      if (wantsCenter) {
-        var headingText2 = await documentService.alignFirstHeading("Center");
-        applied.push("centered");
-        if (!targetDescription) {
-          targetDescription = '"' + headingText2.substring(0, 30) + (headingText2.length > 30 ? '...' : '') + '"';
-        }
-      } else if (wantsLeft) {
-        await documentService.alignFirstHeading("Left");
-        applied.push("left-aligned");
-      } else if (wantsRight) {
-        await documentService.alignFirstHeading("Right");
-        applied.push("right-aligned");
-      }
-      
-      if (applied.length > 0 || removed.length > 0) {
-        // Build appropriate message
-        var msg = "✅ Done! ";
-        if (removed.length > 0) {
-          msg += "Removed " + removed.join(" and ") + " from " + targetDescription;
-        }
-        if (applied.length > 0) {
-          if (removed.length > 0) msg += " and ";
-          msg += "made it " + applied.join(", ");
-        }
-        msg += ".";
-        addAssistantMessage(msg);
-        return true;
-      }
-    }
-    
-    // Case 2: User specified text in quotes
-    if (quotedText) {
-      var formatOptions = {};
-      // Add formatting
-      if (wantsBold) { formatOptions.bold = true; applied.push("bold"); }
-      if (wantsItalic) { formatOptions.italic = true; applied.push("italic"); }
-      if (wantsUnderline) { formatOptions.underline = true; applied.push("underlined"); }
-      // Remove formatting
-      if (wantsRemoveBold) { formatOptions.bold = false; removed.push("bold"); }
-      if (wantsRemoveItalic) { formatOptions.italic = false; removed.push("italics"); }
-      if (wantsRemoveUnderline) { formatOptions.underline = false; removed.push("underline"); }
-      
-      if (Object.keys(formatOptions).length > 0) {
-        var count = await documentService.formatText(quotedText, formatOptions);
-        targetDescription = '"' + quotedText + '"';
-        var msg = "✅ Done! ";
-        if (removed.length > 0) {
-          msg += "Removed " + removed.join(" and ") + " from " + targetDescription;
-        }
-        if (applied.length > 0) {
-          if (removed.length > 0) msg += " and ";
-          msg += "made it " + applied.join(", ");
-        }
-        msg += " (" + count + " occurrence" + (count > 1 ? "s" : "") + ").";
-        addAssistantMessage(msg);
-        return true;
-      }
-    }
-    
-    // Case 3: Check if there's selected text (original behavior)
-    var hasSelection = await documentService.hasSelection();
-    if (!hasSelection) {
-      addAssistantMessage("💡 I can format text for you! Try:\n• Select text first, then say \"make it bold\"\n• Or say \"make the first heading bold\"\n• Or say \"make 'specific text' italic\"\n• Or say \"remove bold and underline from heading\"");
-      return true;
-    }
-    
-    // Apply formatting to selection
-    if (wantsBold || wantsItalic || wantsUnderline || wantsRemoveBold || wantsRemoveItalic || wantsRemoveUnderline) {
-      var formatOptions = {};
-      if (wantsBold) { formatOptions.bold = true; applied.push("bold"); }
-      if (wantsItalic) { formatOptions.italic = true; applied.push("italic"); }
-      if (wantsUnderline) { formatOptions.underline = true; applied.push("underlined"); }
-      if (wantsRemoveBold) { formatOptions.bold = false; removed.push("bold"); }
-      if (wantsRemoveItalic) { formatOptions.italic = false; removed.push("italics"); }
-      if (wantsRemoveUnderline) { formatOptions.underline = false; removed.push("underline"); }
-      
-      await documentService.formatSelection(formatOptions);
-    }
-    
-    // Apply alignment
-    if (wantsCenter) {
-      await documentService.setAlignment("Center");
-      applied.push("centered");
-    } else if (wantsLeft) {
-      await documentService.setAlignment("Left");
-      applied.push("left-aligned");
-    } else if (wantsRight) {
-      await documentService.setAlignment("Right");
-      applied.push("right-aligned");
-    }
-    
-    if (applied.length > 0 || removed.length > 0) {
-      var msg = "✅ Done! ";
-      if (removed.length > 0) {
-        msg += "Removed " + removed.join(" and ") + " from selection";
-      }
-      if (applied.length > 0) {
-        if (removed.length > 0) msg += " and ";
-        msg += "made it " + applied.join(", ");
-      }
-      msg += ".";
-      addAssistantMessage(msg);
-      return true;
-    }
-  } catch (error) {
-    addAssistantMessage("❌ Error: " + error.message);
-    return true;
-  }
-  
-  return false;
 }
 
 // Office.js document operations (legacy - using DocumentService now)
