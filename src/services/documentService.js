@@ -792,6 +792,61 @@ class DocumentService {
       });
     });
   }
+
+  /**
+   * Insert a table into the document
+   * @param {Array<string>} headers - Array of column headers
+   * @param {Array<Array<string>>} rows - 2D array of row data
+   * @param {string} title - Optional title above the table
+   * @returns {Promise<boolean>} Success status
+   */
+  async insertTable(headers, rows, title) {
+    return new Promise(function(resolve, reject) {
+      Word.run(function(context) {
+        var body = context.document.body;
+        
+        // Add title if provided
+        if (title) {
+          var titlePara = body.insertParagraph(title, Word.InsertLocation.end);
+          titlePara.styleBuiltIn = Word.Style.heading2;
+        }
+        
+        // Create table with headers + data rows
+        var totalRows = rows.length + 1; // +1 for header row
+        var totalCols = headers.length;
+        
+        // Insert table at end of document
+        var table = body.insertTable(totalRows, totalCols, Word.InsertLocation.end, null);
+        
+        // Set header row values
+        for (var col = 0; col < headers.length; col++) {
+          var cell = table.getCell(0, col);
+          cell.value = headers[col];
+          cell.body.font.bold = true;
+          cell.shadingColor = "#E0E0E0"; // Light gray background for headers
+        }
+        
+        // Set data row values
+        for (var row = 0; row < rows.length; row++) {
+          for (var col = 0; col < rows[row].length && col < totalCols; col++) {
+            var cell = table.getCell(row + 1, col);
+            cell.value = rows[row][col] || '';
+          }
+        }
+        
+        // Add some basic styling
+        table.styleBuiltIn = Word.Style.gridTable4_Accent1;
+        
+        return context.sync().then(function() {
+          console.log("Table inserted successfully:", totalRows, "rows x", totalCols, "cols");
+          resolve(true);
+        });
+      }).catch(function(error) {
+        console.error("Error inserting table:", error);
+        reject(error);
+      });
+    });
+  }
 }
 
 // Export for use in other files

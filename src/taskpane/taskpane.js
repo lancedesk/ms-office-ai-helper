@@ -608,14 +608,25 @@ Format: [ACTION: FORMAT target="<text or 'first heading'>" bold=<true/false> ita
 Examples:
 - "make heading bold" → [ACTION: FORMAT target="first heading" bold=true]
 - "remove italics from title" → [ACTION: FORMAT target="first heading" italic=false]
-- "unbold and remove underline from heading" → [ACTION: FORMAT target="first heading" bold=false underline=false]
-- "make 'Android' bold" → [ACTION: FORMAT target="Android" bold=true]
+- "unbold the heading" → [ACTION: FORMAT target="first heading" bold=false]
+
+### TABLE - Insert a table
+Format:
+[ACTION: TABLE title="Optional Title"]
+Header1 | Header2 | Header3
+Row1Col1 | Row1Col2 | Row1Col3
+Row2Col1 | Row2Col2 | Row2Col3
+[/TABLE]
+
+Example - Android versions table:
+[ACTION: TABLE title="Android Versions"]
+Version | Code Name | Release Date
+Android 1.0 | Alpha | September 2008
+Android 1.5 | Cupcake | April 2009
+[/TABLE]
 
 ### INSERT - Add new content
 Format: [ACTION: INSERT heading="Title" content="Your content here" newpage=true/false]
-
-Examples:
-- "add a summary" → [ACTION: INSERT heading="Summary" content="This document covers..." newpage=true]
 
 ### REPLACE - Rewrite entire document
 Format:
@@ -629,10 +640,11 @@ Use REPLACE only when user wants to completely reformat/restructure the document
 ## RULES:
 1. ALWAYS include an ACTION command when user wants ANY document change
 2. Understand user intent even with typos, different languages, or informal phrasing
-3. "unbold", "un-bold", "remove bold", "no bold", "取消粗体" all mean bold=false
-4. "unitalic", "remove italics", "no italic" all mean italic=false
-5. Be concise - just confirm what you did
-6. If unclear, ask for clarification`;
+3. "unbold", "un-bold", "remove bold" all mean bold=false
+4. When user asks to fix formatting - USE the REPLACE action with the corrected content
+5. When data should be in a table, use the TABLE action
+6. Be CONCISE - just output the action and a brief confirmation, no long explanations
+7. For formatting tasks, EXECUTE the actions, don't just describe what you would do`;
 }
 
 /**
@@ -784,20 +796,42 @@ async function applyHeadingStyle(level) {
 async function parseAndExecuteActions(response) {
   var cleanedResponse = response;
   
-  // Handle FORMAT action
+  // Handle FORMAT action - support multiple FORMAT actions in one response
   var formatRegex = /\[ACTION:\s*FORMAT\s+([^\]]+)\]/gi;
-  var formatMatch = formatRegex.exec(response);
+  var formatMatch;
   
-  if (formatMatch) {
+  while ((formatMatch = formatRegex.exec(response)) !== null) {
     var actionParams = formatMatch[1];
     
     // Parse parameters
     var targetMatch = actionParams.match(/target\s*=\s*["']([^"']+)["']/i);
     var target = targetMatch ? targetMatch[1] : null;
     
-    var wantsBold = /bold\s*=\s*true/i.test(actionParams);
-    var wantsItalic = /italic\s*=\s*true/i.test(actionParams);
-    var wantsUnderline = /underline\s*=\s*true/i.test(actionParams);
+    // Parse formatting options - check for both true AND false values
+    var formatOptions = {};
+    
+    // Bold
+    if (/bold\s*=\s*true/i.test(actionParams)) {
+      formatOptions.bold = true;
+    } else if (/bold\s*=\s*false/i.test(actionParams)) {
+      formatOptions.bold = false;
+    }
+    
+    // Italic
+    if (/italic\s*=\s*true/i.test(actionParams)) {
+      formatOptions.italic = true;
+    } else if (/italic\s*=\s*false/i.test(actionParams)) {
+      formatOptions.italic = false;
+    }
+    
+    // Underline
+    if (/underline\s*=\s*true/i.test(actionParams)) {
+      formatOptions.underline = true;
+    } else if (/underline\s*=\s*false/i.test(actionParams)) {
+      formatOptions.underline = false;
+    }
+    
+    // Alignment
     var wantsCenter = /center\s*=\s*true/i.test(actionParams);
     var wantsLeft = /left\s*=\s*true/i.test(actionParams);
     var wantsRight = /right\s*=\s*true/i.test(actionParams);
@@ -808,11 +842,6 @@ async function parseAndExecuteActions(response) {
         
         if (isHeadingTarget) {
           // Format first heading
-          var formatOptions = {};
-          if (wantsBold) formatOptions.bold = true;
-          if (wantsItalic) formatOptions.italic = true;
-          if (wantsUnderline) formatOptions.underline = true;
-          
           if (Object.keys(formatOptions).length > 0) {
             await documentService.formatFirstHeading(formatOptions);
           }
@@ -826,24 +855,20 @@ async function parseAndExecuteActions(response) {
           }
         } else {
           // Format specific text
-          var formatOptions = {};
-          if (wantsBold) formatOptions.bold = true;
-          if (wantsItalic) formatOptions.italic = true;
-          if (wantsUnderline) formatOptions.underline = true;
-          
           if (Object.keys(formatOptions).length > 0) {
             await documentService.formatText(target, formatOptions);
           }
         }
         
-        console.log("FORMAT action executed successfully for target:", target);
+        console.log("FORMAT action executed successfully for target:", target, "options:", formatOptions);
       } catch (error) {
         console.error("Error executing FORMAT action:", error);
       }
     }
-    
-    cleanedResponse = cleanedResponse.replace(formatRegex, '').trim();
   }
+  
+  // Remove all FORMAT actions from displayed response
+  cleanedResponse = cleanedResponse.replace(/\[ACTION:\s*FORMAT\s+[^\]]+\]/gi, '').trim();
   
   // Handle INSERT action
   var insertRegex = /\[ACTION:\s*INSERT\s+([^\]]+)\]/gi;
@@ -882,6 +907,58 @@ async function parseAndExecuteActions(response) {
     
     cleanedResponse = cleanedResponse.replace(insertRegex, '').trim();
   }
+  
+  // Handle TABLE action
+  var tableRegex = /\[ACTION:\s*TABLE(?:\s+title\s*=\s*["']([^"']+)["'])?\s*\]\s*([\s\S]*?)\s*\[\/TABLE\]/gi;
+  var tableMatch;
+  
+  while ((tableMatch = tableRegex.exec(response)) !== null) {
+    var tableTitle = tableMatch[1] || null;
+    var tableContent = tableMatch[2].trim();
+    
+    if (tableContent) {
+      try {
+        // Parse the table content - rows separated by newlines, columns by |
+        var lines = tableContent.split('\n').filter(function(line) {
+          return line.trim().length > 0;
+        });
+        
+        if (lines.length > 0) {
+          // First line is headers
+          var headers = lines[0].split('|').map(function(h) {
+            return h.trim();
+          }).filter(function(h) {
+            return h.length > 0;
+          });
+          
+          // Remaining lines are data rows
+          var rows = [];
+          for (var i = 1; i < lines.length; i++) {
+            var row = lines[i].split('|').map(function(cell) {
+              return cell.trim();
+            }).filter(function(cell) {
+              return cell.length > 0 || rows.length === 0; // Allow empty cells
+            });
+            if (row.length > 0) {
+              rows.push(row);
+            }
+          }
+          
+          if (headers.length > 0 && rows.length > 0) {
+            await documentService.insertTable(headers, rows, tableTitle);
+            console.log("TABLE action executed successfully:", headers.length, "cols,", rows.length, "rows");
+            addSystemMessage("📊 Table inserted successfully!");
+          }
+        }
+      } catch (error) {
+        console.error("Error executing TABLE action:", error);
+        addSystemMessage("⚠️ Failed to insert table: " + error.message);
+      }
+    }
+  }
+  
+  // Remove all TABLE actions from displayed response
+  cleanedResponse = cleanedResponse.replace(/\[ACTION:\s*TABLE(?:\s+[^\]]+)?\s*\][\s\S]*?\[\/TABLE\]/gi, '').trim();
   
   // Handle REPLACE action (replace entire document content)
   // Try strict format first (with END tag)
