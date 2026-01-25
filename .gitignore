@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+
+# Build output  
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Office Add-in
+*.pem
+.cache/
+wef/
+
+# Certificates
+certs/
+*.crt
+*.key
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+
+# API Keys and sensitive files (IMPORTANT!)
+docs/api-reference/
+*.key.txt
+api-keys.txt
+secrets.json
+
+# Planning docs (internal use only)
+docs/planning/
+
+# Tools folder (dev testing)
+tools/
+
+# Package lock (optional)
+# package-lock.json

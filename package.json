@@ -1,0 +1,52 @@
+{
+  "name": "ms-office-ai-helper",
+  "version": "1.0.0",
+  "description": "AI-powered assistant for Microsoft Word with Groq and Gemini integration",
+  "main": "index.js",
+  "homepage": "https://lancedesk.github.io/ms-office-ai-helper",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lancedesk/ms-office-ai-helper.git"
+  },
+  "scripts": {
+    "clear-office-cache-win": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$paths = @('$env:LOCALAPPDATA\\Microsoft\\Office\\16.0\\Wef', '$env:LOCALAPPDATA\\Microsoft\\Office\\Wef', '$env:APPDATA\\Microsoft\\Office\\Wef', '$env:LOCALAPPDATA\\Packages\\Microsoft.Win32WebViewHost_cw5n1h2txyewy\\AC\\*'); foreach ($p in $paths) { if (Test-Path $p) { Remove-Item -Path $p -Recurse -Force -ErrorAction SilentlyContinue; Write-Host ('Cleared: ' + $p) } }\"",
+    "clear-webview-cache": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$webviewPaths = @('$env:LOCALAPPDATA\\Microsoft\\Office\\16.0\\WebServiceCache', '$env:LOCALAPPDATA\\Microsoft\\Office\\WebServiceCache'); foreach ($p in $webviewPaths) { if (Test-Path $p) { Remove-Item -Path $p -Recurse -Force -ErrorAction SilentlyContinue; Write-Host ('Cleared WebView cache: ' + $p) } }\"",
+    "clear-dist": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"if (Test-Path './dist') { Remove-Item -Path './dist/*' -Recurse -Force -ErrorAction SilentlyContinue; Write-Host 'Cleared dist folder' }\"",
+    "clear-all-cache": "npm run clear-dist && npm run clear-office-cache-win && npm run clear-webview-cache",
+    "prestart": "npm run clear-all-cache",
+    "start": "office-addin-debugging start manifest.xml desktop",
+    "start-clean": "npm run stop && npm run clear-all-cache && npm run start",
+    "stop": "office-addin-debugging stop manifest.xml",
+    "validate": "office-addin-manifest validate manifest.xml",
+    "dev-server": "webpack serve --mode development",
+    "build": "webpack --mode production && cp manifest.production.xml dist/manifest.xml",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist",
+    "sideload": "office-addin-dev-certs install && office-addin-debugging start manifest.xml desktop --debug-method direct"
+  },
+  "keywords": [
+    "office-add-in",
+    "word",
+    "ai",
+    "groq"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "core-js": "^3.26.1"
+  },
+  "devDependencies": {
+    "css-loader": "^6.7.3",
+    "file-loader": "^6.2.0",
+    "gh-pages": "^6.3.0",
+    "html-webpack-plugin": "^5.5.0",
+    "office-addin-debugging": "^5.0.0",
+    "office-addin-dev-certs": "^1.11.3",
+    "office-addin-lint": "^2.2.3",
+    "office-addin-manifest": "^1.12.3",
+    "style-loader": "^3.3.1",
+    "webpack": "^5.76.0",
+    "webpack-cli": "^5.0.1",
+    "webpack-dev-server": "^4.11.1"
+  }
+}
