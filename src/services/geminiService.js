@@ -164,6 +164,4 @@ class GeminiService {
 }
 
 // Export for use in other files
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = GeminiService;
-}
+module.exports = GeminiService;

@@ -216,6 +216,4 @@ class GroqService {
 }
 
 // Export for use in other files
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = GroqService;
-}
+module.exports = GroqService;

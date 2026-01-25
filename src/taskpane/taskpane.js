@@ -1,5 +1,8 @@
 /* global Office, Word */
 
+// Polyfills for IE11/Office 2019 compatibility
+require('whatwg-fetch');
+
 // Wrap everything in try-catch to catch any initialization errors
 try {
 
