@@ -113,7 +113,7 @@ function attachEventHandlers() {
       settingsBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        showApiKeySettings();
+        toggleSettings();
       });
     }
 
@@ -496,6 +496,8 @@ function showApiKeySetup() {
   removeWelcomeScreen();
   initializeElements();
   
+  isSettingsOpen = true;
+  
   const setupDiv = document.createElement("div");
   setupDiv.id = "api-key-setup";
   setupDiv.className = "api-key-setup";
@@ -766,6 +768,17 @@ async function saveApiKey(provider) {
 
 // Provider switch functions removed - now handled in settings panel
 
+// Track if settings panel is open
+let isSettingsOpen = false;
+
+function toggleSettings() {
+  if (isSettingsOpen) {
+    closeSettingsPanel();
+  } else {
+    showApiKeySettings();
+  }
+}
+
 async function showApiKeySettings() {
   // Check if we already have keys configured
   const hasGroqKey = await apiKeyManager.hasApiKey('groq');
@@ -789,6 +802,8 @@ async function showSettingsPanel(hasGroqKey, hasGeminiKey) {
   if (existingPanel) {
     existingPanel.remove();
   }
+  
+  isSettingsOpen = true;
   
   const currentProviderName = apiKeyManager.getProviderName(currentProvider);
   
@@ -938,6 +953,12 @@ function closeSettingsPanel() {
   if (panel) {
     panel.remove();
   }
+  // Also close api-key-setup if open
+  const setupPanel = document.getElementById('api-key-setup');
+  if (setupPanel) {
+    setupPanel.remove();
+  }
+  isSettingsOpen = false;
 }
 
 async function getDocumentContext() {
