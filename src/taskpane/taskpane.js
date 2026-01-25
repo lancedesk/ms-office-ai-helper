@@ -597,55 +597,49 @@ function buildSystemContext() {
 CRITICAL: You MUST use ACTION commands to change the document. Just typing text does NOTHING.
 
 ## REPLACE - Reformat entire document
-Use this when user asks to fix formatting, correct document, reformat, etc.
+Use when user asks to fix formatting, correct document, reformat, etc.
+
+IMPORTANT: PRESERVE ALL ORIGINAL CONTENT. Do not summarize or remove sections!
 
 [ACTION: REPLACE]
 ---CONTENT START---
 # Main Title
 
-Regular paragraph text here.
+First paragraph with all original text preserved.
 
 ## Section Heading
 
-Another paragraph.
+All content from original section here.
 
 - Bullet point 1
 - Bullet point 2
-- Bullet point 3
 
-1. Numbered item 1
-2. Numbered item 2
+| Column1 | Column2 | Column3 |
+| Data1 | Data2 | Data3 |
+| Data4 | Data5 | Data6 |
 
 ### Sub-section
 
 More text here.
 ---CONTENT END---
 
-FORMATTING RULES for REPLACE content:
-- # Title (becomes Heading 1)
-- ## Section (becomes Heading 2)  
-- ### Subsection (becomes Heading 3)
-- Lines starting with - become bullet points
-- Lines starting with 1. 2. etc become numbered lists
-- Plain text becomes regular paragraph
+FORMATTING RULES:
+- # Title = Heading 1
+- ## Section = Heading 2
+- ### Subsection = Heading 3
+- Lines with - = bullet points
+- Lines with 1. 2. = numbered lists
+- Lines with | = table rows (will become Word table)
+- PRESERVE ALL original content - do not summarize!
 
-## TABLE - Insert a table (use SEPARATELY, after REPLACE if needed)
-[ACTION: TABLE title="Table Title"]
-Column1 | Column2 | Column3
-Data1 | Data2 | Data3
-Data4 | Data5 | Data6
-[/TABLE]
-
-## FORMAT - Change formatting of specific text
+## FORMAT - Bold/italic specific text (optional, after REPLACE)
 [ACTION: FORMAT target="first heading" bold=true]
-[ACTION: FORMAT target="some text" italic=false]
 
-## ABSOLUTE RULES:
-1. ALWAYS use ---CONTENT START--- and ---CONTENT END--- markers for REPLACE
-2. Use - for bullet points (dash followed by space)
-3. For tables, use TABLE action AFTER the REPLACE action, not inside it
-4. Output the ACTION command(s) first, then a brief confirmation
-5. When asked to fix/reformat a document, use REPLACE immediately`;
+## RULES:
+1. ALWAYS use ---CONTENT START--- and ---CONTENT END--- markers
+2. PRESERVE ALL content from the original document
+3. Tables use | pipe | format | directly in REPLACE content
+4. Do NOT summarize - include everything from the original`;
 }
 
 /**
@@ -983,6 +977,13 @@ async function parseAndExecuteActions(response) {
   
   if (replaceMatch) {
     var newContent = replaceMatch[1].trim();
+    
+    // Clean up any stray ACTION markers from the content
+    newContent = newContent.replace(/\[ACTION:\s*TABLE[^\]]*\]/gi, '');
+    newContent = newContent.replace(/\[\/TABLE\]/gi, '');
+    newContent = newContent.replace(/\[ACTION:\s*FORMAT[^\]]*\]/gi, '');
+    newContent = newContent.replace(/\[\/ACTION\]/gi, '');
+    newContent = newContent.trim();
     
     if (newContent && newContent.length > 50) {
       // Only replace if content is substantial (more than 50 chars)
