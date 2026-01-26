@@ -5,20 +5,35 @@ An intelligent AI-powered assistant add-in for Microsoft Word that integrates wi
 ## ✨ Features
 
 - 📄 **Document Analysis** - Read and understand your document content
-- ✍️ **Smart Editing** - Format, edit, or restructure content with AI assistance
+- ✍️ **Smart Editing** - Format, edit, or restructure content with natural language commands
 - 💡 **Summaries** - Get quick summaries of your documents
 - 🎨 **Formatting** - Create headers, tables, and more with simple commands
 - 🔄 **Multi-Provider Support** - Switch between Groq and Google Gemini AI
+- 🤖 **Natural Language** - Just tell the AI what you want in plain English
+
+## 🌐 Live Demo
+
+| Resource | URL |
+|----------|-----|
+| **Add-in Home** | [https://lancedesk.github.io/ms-office-ai-helper/](https://lancedesk.github.io/ms-office-ai-helper/) |
+| **Manifest File** | [https://lancedesk.github.io/ms-office-ai-helper/manifest.xml](https://lancedesk.github.io/ms-office-ai-helper/manifest.xml) |
 
 ## 📋 Prerequisites
 
 - Microsoft Word 2016 or later (Windows/Mac) or Word Online
-- Node.js 18+ and npm
+- Node.js 18+ and npm (for development only)
 - A Groq API key ([Get one here](https://console.groq.com/keys)) or Google Gemini API key ([Get one here](https://aistudio.google.com/apikey))
 
 ## 🚀 Quick Start
 
-### Installation
+### Option 1: Use the Hosted Version (Recommended)
+
+1. **Download the manifest:** [manifest.xml](https://lancedesk.github.io/ms-office-ai-helper/manifest.xml)
+2. Open Word → **Insert** → **Get Add-ins** → **My Add-ins** → **Upload My Add-in**
+3. Upload the downloaded manifest.xml
+4. Enter your API key when prompted
+
+### Option 2: Development Setup
 
 ```bash
 # Clone the repository
@@ -30,22 +45,34 @@ npm install
 
 # Install SSL certificates for local development
 npx office-addin-dev-certs install
-```
 
-### Development
-
-```bash
-# Start the development server and sideload in Word
+# Start the development server
 npm start
-
-# Or run just the dev server
-npm run dev-server
 ```
 
-### Production Build
+## 📁 Project Structure
 
-```bash
-npm run build
+```
+ms-office-ai-helper/
+├── src/
+│   ├── taskpane/
+│   │   ├── taskpane.html      # Main UI
+│   │   ├── taskpane.js        # Main entry point
+│   │   └── modules/           # Modular components
+│   │       ├── chatUI.js      # Chat message rendering
+│   │       ├── aiPrompts.js   # AI system prompts
+│   │       ├── actionExecutor.js  # Execute AI actions
+│   │       └── settingsPanel.js   # Settings UI
+│   ├── commands/              # Office ribbon commands
+│   └── services/              # AI services
+│       ├── groqService.js     # Groq API integration
+│       ├── geminiService.js   # Gemini API integration
+│       ├── documentService.js # Word document operations
+│       └── apiKeyManager.js   # API key storage
+├── dist/                      # Production build
+├── manifest.xml               # Office Add-in manifest
+├── webpack.config.js          # Build configuration
+└── package.json
 ```
 
 ## ⚙️ Configuration
@@ -61,82 +88,33 @@ When you first open the add-in, you'll be prompted to enter your API key:
 
 API keys are stored locally in your browser/Office storage and are never sent to any server except the respective AI provider.
 
-## 📁 Project Structure
+## 💬 Usage Examples
 
-```
-ms-office-ai-helper/
-├── src/
-│   ├── taskpane/          # Main UI (taskpane.html, taskpane.js)
-│   ├── commands/          # Office commands
-│   └── services/          # AI services (Groq, Gemini, API Key Manager)
-├── scripts/               # Utility scripts
-├── docs/                  # Documentation
-├── manifest.xml           # Office Add-in manifest
-├── webpack.config.js      # Build configuration
-└── package.json
-```
+Just type naturally! The AI understands what you want:
 
-## 🌐 Deployment
+| What You Say | What Happens |
+|--------------|--------------|
+| "Find the word 'important' and make it bold" | Searches and applies bold formatting |
+| "Underline all instances of 'COMP 414'" | Finds and underlines the text |
+| "Replace 'old text' with 'new text'" | Find and replace |
+| "Add a heading called 'Conclusion' at the end" | Inserts a new heading |
+| "Highlight all occurrences of 'warning' in yellow" | Applies yellow highlight |
+| "Create a new blank document" | Opens a new Word document |
+| "Summarize this document" | AI summarizes the content |
 
-### GitHub Pages (Recommended)
+## 🔧 Sideloading the Add-in
 
-This add-in is deployed to GitHub Pages for reliable HTTPS hosting:
-
-**Live URL:** `https://lancedesk.github.io/ms-office-ai-helper/`
-
-To deploy your own:
-
-```bash
-npm run build
-npm run deploy
-```
-
-Then update the `manifest.xml` URLs to point to your GitHub Pages URL.
-
-### Manual Deployment
-
-1. Run `npm run build`
-2. Upload the `dist/` folder contents to any HTTPS-enabled web server
-3. Update all URLs in `manifest.xml` to point to your server
-4. Sideload the updated manifest in Word
-
-## � Sideloading the Add-in
-
-### Microsoft 365 / Office 365 (Recommended)
+### Microsoft 365 / Office 365
 
 1. Open Word
 2. Go to **Insert** → **Get Add-ins** → **MY ADD-INS** tab
 3. Click **Upload My Add-in**
-4. Browse to `manifest.xml` (or download from GitHub Pages)
+4. Browse to `manifest.xml` or download from [GitHub Pages](https://lancedesk.github.io/ms-office-ai-helper/manifest.xml)
 5. Click **Upload**
 
-### Office 2019 / Office 2016 (Shared Folder Method)
+### Office 2019 / Office 2016
 
-Office 2019/2016 requires a **Trusted Catalog** instead of direct upload:
-
-#### Step 1: Create a Shared Folder Catalog
-
-1. Create a folder on your computer, e.g., `C:\OfficeAddins`
-2. Share the folder:
-   - Right-click → **Properties** → **Sharing** tab
-   - Click **Share...** → Add **Everyone** with **Read** permissions
-   - Note the network path (e.g., `\\YOUR-PC-NAME\OfficeAddins`)
-
-#### Step 2: Add as Trusted Catalog
-
-1. Open Word → **File** → **Options** → **Trust Center**
-2. Click **Trust Center Settings...** → **Trusted Add-in Catalogs**
-3. In **Catalog Url**, enter your shared folder path: `\\YOUR-PC-NAME\OfficeAddins`
-4. Click **Add catalog** → Check **Show in Menu** checkbox
-5. Click **OK** → **OK** again
-6. **Restart Word**
-
-#### Step 3: Install the Add-in
-
-1. Download `manifest.xml` from `https://lancedesk.github.io/ms-office-ai-helper/manifest.xml`
-2. Copy `manifest.xml` to your shared folder (`C:\OfficeAddins`)
-3. Open Word → **Insert** → **My Add-ins** → **SHARED FOLDER** tab
-4. Select **AI Helper** → Click **Add**
+See the detailed guide: [INSTALLATION.md](INSTALLATION.md)
 
 ### Word Online
 
@@ -145,31 +123,31 @@ Office 2019/2016 requires a **Trusted Catalog** instead of direct upload:
 3. **Insert** → **Add-ins** → **Upload Add-in**
 4. Upload `manifest.xml`
 
-## �🔧 Troubleshooting
+## 🔧 Troubleshooting
 
 ### SSL Certificate Issues (Local Development)
-
-If you see certificate warnings:
 
 ```bash
 # Reinstall certificates
 npx office-addin-dev-certs uninstall
 npx office-addin-dev-certs install --days 365
-
-# Run the loopback setup (Windows, as Administrator)
-powershell -ExecutionPolicy Bypass -File scripts/setup-loopback.ps1
 ```
 
 ### Cache Issues
 
-Clear Office add-in caches:
-
 ```bash
-# Windows
+# Windows - clear Office add-in caches
 powershell -ExecutionPolicy Bypass -File scripts/clear-all-caches.ps1
 
 # Then restart
 npm run start-clean
+```
+
+## 🏗️ Building for Production
+
+```bash
+npm run build
+npm run deploy  # Deploys to GitHub Pages
 ```
 
 ## 🤝 Contributing

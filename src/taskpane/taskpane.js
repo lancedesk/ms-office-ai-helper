@@ -725,12 +725,15 @@ await Word.run(async (context) => {
 [/EXECUTE]
 
 ## RULES:
-1. Always use [EXECUTE] tags for code
-2. Always use await Word.run(async (context) => {...})
-3. Always call await context.sync() after load() and at the end
-4. Use var instead of let/const for compatibility
-5. Keep explanations brief - just confirm what you did
-6. If no document action needed, just respond normally without [EXECUTE]`;
+1. ALWAYS use [EXECUTE] and [/EXECUTE] tags for code - this is the ONLY way to run code
+2. NEVER use [ACTION: ...] format - it does NOT work
+3. NEVER respond with fake actions like [ACTION: FIND], [ACTION: UNDERLINE], etc.
+4. Always use await Word.run(async (context) => {...})
+5. Always call await context.sync() after load() and at the end
+6. Use var instead of let/const for compatibility
+7. Keep explanations brief - just confirm what you did
+8. If no document action needed, just respond normally without [EXECUTE]
+9. For "first occurrence" requests, use results.items[0] not all items`;
 }
 
 /**

@@ -1,4 +1,5 @@
 const HtmlWebpackPlugin = require("html-webpack-plugin");
+const CopyWebpackPlugin = require("copy-webpack-plugin");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -82,6 +83,11 @@ module.exports = {
       filename: "commands.html",
       template: "./src/commands/commands.html",
       chunks: ["commands"]
+    }),
+    new CopyWebpackPlugin({
+      patterns: [
+        { from: "public", to: "." }
+      ]
     })
   ],
   module: {
