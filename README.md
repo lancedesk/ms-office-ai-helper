@@ -57,12 +57,7 @@ ms-office-ai-helper/
 ├── src/
 │   ├── taskpane/
 │   │   ├── taskpane.html      # Main UI
-│   │   ├── taskpane.js        # Main entry point
-│   │   └── modules/           # Modular components
-│   │       ├── chatUI.js      # Chat message rendering
-│   │       ├── aiPrompts.js   # AI system prompts
-│   │       ├── actionExecutor.js  # Execute AI actions
-│   │       └── settingsPanel.js   # Settings UI
+│   │   └── taskpane.js        # Main application logic
 │   ├── commands/              # Office ribbon commands
 │   └── services/              # AI services
 │       ├── groqService.js     # Groq API integration
