@@ -90,7 +90,7 @@ Just type naturally! The AI understands what you want:
 | What You Say | What Happens |
 |--------------|--------------|
 | "Find the word 'important' and make it bold" | Searches and applies bold formatting |
-| "Underline all instances of 'COMP 414'" | Finds and underlines the text |
+| "Underline all instances of 'project'" | Finds and underlines the text |
 | "Replace 'old text' with 'new text'" | Find and replace |
 | "Add a heading called 'Conclusion' at the end" | Inserts a new heading |
 | "Highlight all occurrences of 'warning' in yellow" | Applies yellow highlight |
