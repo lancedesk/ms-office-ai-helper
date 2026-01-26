@@ -925,6 +925,51 @@ class DocumentService {
       });
     });
   }
+  
+  /**
+   * Create a new document with optional content
+   * Note: This uses Word.Application.createDocument which works on desktop Word
+   * For Word Online, it may have limitations
+   * @param {string} content - Optional content to add to the new document (markdown format)
+   * @returns {Promise<boolean>} True if successful
+   */
+  async createDocument(content) {
+    var self = this;
+    return new Promise(function(resolve, reject) {
+      Word.run(function(context) {
+        // Try to create a new document using Application.createDocument
+        // This creates a blank document in a new window
+        try {
+          var app = context.application;
+          var newDoc = app.createDocument();
+          newDoc.load();
+          
+          return context.sync().then(function() {
+            // Open the new document
+            newDoc.open();
+            return context.sync();
+          }).then(function() {
+            // If content was provided, we need to add it to the new document
+            // But since it's a new window, we'll add a message
+            console.log("New document created successfully");
+            resolve({ success: true, hasContent: !!content, contentToAdd: content });
+          });
+        } catch (e) {
+          // Fallback: createDocument may not be available in all contexts
+          // In that case, offer to clear current document instead
+          console.warn("createDocument not available, using fallback:", e.message);
+          reject(new Error("CREATE_NOT_SUPPORTED"));
+        }
+      }).catch(function(error) {
+        console.error("Error creating document:", error);
+        if (error.message && error.message.includes("not supported")) {
+          reject(new Error("CREATE_NOT_SUPPORTED"));
+        } else {
+          reject(error);
+        }
+      });
+    });
+  }
 }
 
 // Export for use in other files

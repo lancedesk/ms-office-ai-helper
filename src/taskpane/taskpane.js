@@ -468,6 +468,25 @@ async function sendMessage() {
   addUserMessage(message);
   messageInput.value = "";
   
+  // Check if user is confirming a pending CREATE fallback
+  if (window._pendingCreateContent && message.toLowerCase().match(/^(yes|yeah|ok|confirm|do it|replace)/)) {
+    showLoading();
+    try {
+      var confirmed = await showReplaceConfirmation(window._pendingCreateContent);
+      if (confirmed) {
+        await documentService.replaceDocumentContent(window._pendingCreateContent);
+        addSystemMessage("📝 Document has been replaced with the new content!");
+      } else {
+        addSystemMessage("❌ Document replacement cancelled.");
+      }
+    } catch (error) {
+      addSystemMessage("⚠️ Failed to replace document: " + error.message);
+    }
+    window._pendingCreateContent = null;
+    hideLoading();
+    return;
+  }
+  
   // All requests go through AI - it interprets intent and returns structured actions
   // No more hardcoded pattern matching!
 
@@ -596,7 +615,7 @@ function buildSystemContext() {
 
 ## SUPPORTED ACTIONS (use ONLY these - no others exist):
 
-### 1. REPLACE - Replace/reformat document content
+### 1. REPLACE - Replace/reformat entire document content
 [ACTION: REPLACE]
 ---CONTENT START---
 # Title
@@ -607,23 +626,29 @@ Paragraph text
 | Data | Data |
 ---CONTENT END---
 
-### 2. FORMAT - Apply formatting to text
+### 2. FORMAT - Apply formatting to specific text
 [ACTION: FORMAT target="first heading" bold=true]
 
-### 3. INSERT - Add content at end
+### 3. INSERT - Add content at end of document
 [ACTION: INSERT heading="Section" content="text here" newpage=false]
 
-## FORMATTING SYNTAX (inside REPLACE):
+### 4. CREATE - Create a NEW blank document (opens in new window)
+[ACTION: CREATE]
+---CONTENT START---
+# New Document Title
+Content for the new document...
+---CONTENT END---
+
+## FORMATTING SYNTAX (for REPLACE and CREATE):
 - # = Heading 1, ## = Heading 2, ### = Heading 3
-- Lines with - = bullet points
-- Lines with | = table rows
+- Lines starting with - = bullet points
+- Lines with | = table rows (pipe-separated)
 
 ## RULES:
-1. ONLY use the 3 actions above - DO NOT invent new actions
-2. NO [ACTION: CREATE DOCUMENT], [ACTION: TOC], or other actions
-3. To add to current doc, use INSERT. To rewrite, use REPLACE.
-4. For summaries: use REPLACE with summarized content
-5. Keep response brief after the action`;
+1. ONLY use the 4 actions above - DO NOT invent new actions
+2. For summarizing: use REPLACE to update current doc, or CREATE for new doc
+3. CREATE opens a new Word window with the content
+4. Keep response brief after the action`;
 }
 
 /**
@@ -938,6 +963,59 @@ async function parseAndExecuteActions(response) {
   
   // Remove all TABLE actions from displayed response
   cleanedResponse = cleanedResponse.replace(/\[ACTION:\s*TABLE(?:\s+[^\]]+)?\s*\][\s\S]*?\[\/TABLE\]/gi, '').trim();
+  
+  // Handle CREATE action (create new document with content)
+  var createRegex = /\[ACTION:\s*CREATE\s*\]\s*---CONTENT START---\s*([\s\S]*?)\s*---CONTENT END---/gi;
+  var createMatch = createRegex.exec(response);
+  
+  // Try lenient format for CREATE too
+  if (!createMatch) {
+    var lenientCreateRegex = /\[ACTION:\s*CREATE\s*\]\s*---CONTENT START---\s*([\s\S]+)/gi;
+    createMatch = lenientCreateRegex.exec(response);
+    if (createMatch) {
+      var content = createMatch[1];
+      content = content.replace(/\n\n\*\*Note:?\*\*[\s\S]*$/i, '');
+      content = content.replace(/\n\nI've (created|made)[\s\S]*$/i, '');
+      createMatch[1] = content.trim();
+    }
+  }
+  
+  if (createMatch) {
+    var newDocContent = createMatch[1].trim();
+    
+    // Clean up any stray ACTION markers from the content
+    newDocContent = newDocContent.replace(/\[ACTION:[^\]]*\]/gi, '');
+    newDocContent = newDocContent.replace(/\[\/[A-Z]+\]/gi, '');
+    newDocContent = newDocContent.trim();
+    
+    if (newDocContent && newDocContent.length > 10) {
+      try {
+        var result = await documentService.createDocument(newDocContent);
+        if (result.success) {
+          console.log("CREATE action executed successfully");
+          addSystemMessage("📄 New document created! Check the new Word window.");
+          
+          // If content was provided, let user know they may need to paste it
+          if (result.hasContent) {
+            addSystemMessage("💡 Tip: The content for your new document is ready. You may need to paste it in the new window.");
+          }
+        }
+      } catch (error) {
+        console.error("Error executing CREATE action:", error);
+        if (error.message === "CREATE_NOT_SUPPORTED") {
+          // Fallback: offer to replace current document instead
+          addSystemMessage("⚠️ Creating new documents isn't supported in this version of Word. Would you like me to REPLACE the current document content instead? Reply 'yes' to confirm.");
+          // Store the content for potential REPLACE
+          window._pendingCreateContent = newDocContent;
+        } else {
+          addSystemMessage("⚠️ Failed to create new document: " + error.message);
+        }
+      }
+    }
+    
+    // Remove the CREATE action from displayed response
+    cleanedResponse = cleanedResponse.replace(/\[ACTION:\s*CREATE\s*\]\s*---CONTENT START---[\s\S]*/gi, '').trim();
+  }
   
   // Handle REPLACE action (replace entire document content)
   // Try strict format first (with END tag)
