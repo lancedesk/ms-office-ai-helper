@@ -611,44 +611,126 @@ function shouldIncludeDocumentContext(message) {
  * @returns {string} System context prompt
  */
 function buildSystemContext() {
-  return `You are an AI assistant that edits Microsoft Word documents using ACTION commands.
+  return `You are an AI assistant for Microsoft Word. You can do ANYTHING the user asks by generating Office.js code.
 
-## SUPPORTED ACTIONS (use ONLY these - no others exist):
+## HOW TO EXECUTE ACTIONS:
+When the user asks you to do something to the document, respond with JavaScript code inside [EXECUTE] tags:
 
-### 1. REPLACE - Replace/reformat entire document content
-[ACTION: REPLACE]
----CONTENT START---
-# Title
-## Section
-Paragraph text
-- Bullet point
-| Col1 | Col2 |
-| Data | Data |
----CONTENT END---
+[EXECUTE]
+await Word.run(async (context) => {
+  // Your Office.js code here
+  await context.sync();
+});
+[/EXECUTE]
 
-### 2. FORMAT - Apply formatting to specific text
-[ACTION: FORMAT target="first heading" bold=true]
+## OFFICE.JS API REFERENCE:
 
-### 3. INSERT - Add content at end of document
-[ACTION: INSERT heading="Section" content="text here" newpage=false]
+### Reading Document:
+- context.document.body.load("text") → body.text
+- context.document.body.paragraphs.load("items") → paragraphs.items[]
+- context.document.body.search("word") → search results
 
-### 4. CREATE - Create a NEW blank document (opens in new window)
-[ACTION: CREATE]
----CONTENT START---
-# New Document Title
-Content for the new document...
----CONTENT END---
+### Writing/Inserting:
+- body.insertParagraph("text", Word.InsertLocation.end)
+- body.insertText("text", Word.InsertLocation.end)
+- body.clear() → clears document
 
-## FORMATTING SYNTAX (for REPLACE and CREATE):
-- # = Heading 1, ## = Heading 2, ### = Heading 3
-- Lines starting with - = bullet points
-- Lines with | = table rows (pipe-separated)
+### Formatting:
+- range.font.bold = true/false
+- range.font.italic = true/false
+- range.font.underline = Word.UnderlineType.single / .none
+- range.font.color = "#FF0000"
+- range.font.size = 14
+- range.font.highlightColor = "Yellow"
+- paragraph.styleBuiltIn = Word.Style.heading1 / .heading2 / .normal
+
+### Search & Replace:
+- var results = body.search("word", {matchCase: false, matchWholeWord: true})
+- results.load("items")
+- results.items[i].insertText("replacement", Word.InsertLocation.replace)
+
+### Tables:
+- body.insertTable(rows, cols, Word.InsertLocation.end, [["data"]])
+- table.getCell(row, col).value = "text"
+
+### New Document:
+- var newDoc = context.application.createDocument()
+- newDoc.open()
+
+### Selection:
+- var selection = context.document.getSelection()
+- selection.load("text")
+
+## EXAMPLES:
+
+User: "Find the word 'important' and make it bold"
+[EXECUTE]
+await Word.run(async (context) => {
+  var results = context.document.body.search("important", {matchCase: false});
+  results.load("items");
+  await context.sync();
+  for (var i = 0; i < results.items.length; i++) {
+    results.items[i].font.bold = true;
+  }
+  await context.sync();
+});
+[/EXECUTE]
+
+User: "Underline all occurrences of 'note'"
+[EXECUTE]
+await Word.run(async (context) => {
+  var results = context.document.body.search("note", {matchCase: false});
+  results.load("items");
+  await context.sync();
+  for (var i = 0; i < results.items.length; i++) {
+    results.items[i].font.underline = Word.UnderlineType.single;
+  }
+  await context.sync();
+});
+[/EXECUTE]
+
+User: "Replace 'old' with 'new'"
+[EXECUTE]
+await Word.run(async (context) => {
+  var results = context.document.body.search("old", {matchCase: false});
+  results.load("items");
+  await context.sync();
+  for (var i = 0; i < results.items.length; i++) {
+    results.items[i].insertText("new", Word.InsertLocation.replace);
+  }
+  await context.sync();
+});
+[/EXECUTE]
+
+User: "Add a heading at the end"
+[EXECUTE]
+await Word.run(async (context) => {
+  var para = context.document.body.insertParagraph("New Section", Word.InsertLocation.end);
+  para.styleBuiltIn = Word.Style.heading1;
+  await context.sync();
+});
+[/EXECUTE]
+
+User: "Highlight all instances of 'warning' in yellow"
+[EXECUTE]
+await Word.run(async (context) => {
+  var results = context.document.body.search("warning", {matchCase: false});
+  results.load("items");
+  await context.sync();
+  for (var i = 0; i < results.items.length; i++) {
+    results.items[i].font.highlightColor = "Yellow";
+  }
+  await context.sync();
+});
+[/EXECUTE]
 
 ## RULES:
-1. ONLY use the 4 actions above - DO NOT invent new actions
-2. For summarizing: use REPLACE to update current doc, or CREATE for new doc
-3. CREATE opens a new Word window with the content
-4. Keep response brief after the action`;
+1. Always use [EXECUTE] tags for code
+2. Always use await Word.run(async (context) => {...})
+3. Always call await context.sync() after load() and at the end
+4. Use var instead of let/const for compatibility
+5. Keep explanations brief - just confirm what you did
+6. If no document action needed, just respond normally without [EXECUTE]`;
 }
 
 /**
@@ -800,7 +882,45 @@ async function applyHeadingStyle(level) {
 async function parseAndExecuteActions(response) {
   var cleanedResponse = response;
   
-  // Handle FORMAT action - support multiple FORMAT actions in one response
+  // Handle [EXECUTE] code blocks - this is the new dynamic approach
+  var executeRegex = /\[EXECUTE\]\s*([\s\S]*?)\s*\[\/EXECUTE\]/gi;
+  var executeMatch;
+  var executedCount = 0;
+  var errors = [];
+  
+  while ((executeMatch = executeRegex.exec(response)) !== null) {
+    var code = executeMatch[1].trim();
+    
+    if (code) {
+      try {
+        console.log("Executing dynamic Office.js code:", code.substring(0, 100) + "...");
+        
+        // Execute the code dynamically
+        // The code should be an async function body that uses Word.run
+        var asyncFunc = new Function('Word', 'context', 'return (async () => { ' + code + ' })()');
+        await asyncFunc(Word, null);
+        
+        executedCount++;
+        console.log("Code executed successfully");
+      } catch (error) {
+        console.error("Error executing dynamic code:", error);
+        errors.push(error.message);
+      }
+    }
+  }
+  
+  // Show result message
+  if (executedCount > 0) {
+    addSystemMessage("✅ Done! Executed " + executedCount + " action" + (executedCount > 1 ? "s" : "") + " successfully.");
+  }
+  if (errors.length > 0) {
+    addSystemMessage("⚠️ Some actions failed: " + errors.join(", "));
+  }
+  
+  // Remove all [EXECUTE] blocks from displayed response
+  cleanedResponse = cleanedResponse.replace(/\[EXECUTE\][\s\S]*?\[\/EXECUTE\]/gi, '').trim();
+  
+  // Also handle legacy FORMAT action for backward compatibility
   var formatRegex = /\[ACTION:\s*FORMAT\s+([^\]]+)\]/gi;
   var formatMatch;
   
@@ -1073,6 +1193,7 @@ async function parseAndExecuteActions(response) {
   
   // Final cleanup: remove ANY remaining action-like patterns that users shouldn't see
   cleanedResponse = cleanedResponse
+    .replace(/\[EXECUTE\][\s\S]*?\[\/EXECUTE\]/gi, '')  // [EXECUTE]...[/EXECUTE]
     .replace(/\[ACTION:[^\]]*\]/gi, '')           // [ACTION: anything]
     .replace(/\[\/[A-Z]+\]/gi, '')                 // [/TABLE], [/ACTION], etc.
     .replace(/\[TOC\]/gi, '')                      // [TOC]
