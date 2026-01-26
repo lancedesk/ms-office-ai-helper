@@ -592,36 +592,38 @@ function shouldIncludeDocumentContext(message) {
  * @returns {string} System context prompt
  */
 function buildSystemContext() {
-  return `You are an AI assistant that DIRECTLY EDITS Microsoft Word documents using ACTION commands.
+  return `You are an AI assistant that edits Microsoft Word documents using ACTION commands.
 
-CRITICAL: You MUST use ACTION commands to change the document. Just typing text does NOTHING.
+## SUPPORTED ACTIONS (use ONLY these - no others exist):
 
-## REPLACE - Reformat document
-Use when user asks to fix formatting, correct document, reformat, etc.
-
-FORMAT:
+### 1. REPLACE - Replace/reformat document content
 [ACTION: REPLACE]
 ---CONTENT START---
-# Main Title
-
-Content here with proper formatting...
+# Title
+## Section
+Paragraph text
+- Bullet point
+| Col1 | Col2 |
+| Data | Data |
 ---CONTENT END---
 
-FORMATTING RULES:
-- # = Heading 1
-- ## = Heading 2  
-- ### = Heading 3
-- Lines starting with - = bullet points
-- Lines with | col1 | col2 | = table rows
-- Plain text = normal paragraph
-
-## FORMAT - Bold/italic specific text
+### 2. FORMAT - Apply formatting to text
 [ACTION: FORMAT target="first heading" bold=true]
 
-## CRITICAL RULES:
-1. ALWAYS use ---CONTENT START--- and ---CONTENT END--- markers
-2. Tables: use | pipe | format | in content (becomes real Word table)
-3. Keep explanations brief - just confirm the action`;
+### 3. INSERT - Add content at end
+[ACTION: INSERT heading="Section" content="text here" newpage=false]
+
+## FORMATTING SYNTAX (inside REPLACE):
+- # = Heading 1, ## = Heading 2, ### = Heading 3
+- Lines with - = bullet points
+- Lines with | = table rows
+
+## RULES:
+1. ONLY use the 3 actions above - DO NOT invent new actions
+2. NO [ACTION: CREATE DOCUMENT], [ACTION: TOC], or other actions
+3. To add to current doc, use INSERT. To rewrite, use REPLACE.
+4. For summaries: use REPLACE with summarized content
+5. Keep response brief after the action`;
 }
 
 /**
@@ -990,6 +992,17 @@ async function parseAndExecuteActions(response) {
     // Remove the action from displayed response
     cleanedResponse = cleanedResponse.replace(/\[ACTION:\s*REPLACE\s*\]\s*---CONTENT START---[\s\S]*/gi, '').trim();
   }
+  
+  // Final cleanup: remove ANY remaining action-like patterns that users shouldn't see
+  cleanedResponse = cleanedResponse
+    .replace(/\[ACTION:[^\]]*\]/gi, '')           // [ACTION: anything]
+    .replace(/\[\/[A-Z]+\]/gi, '')                 // [/TABLE], [/ACTION], etc.
+    .replace(/\[TOC\]/gi, '')                      // [TOC]
+    .replace(/---CONTENT START---/gi, '')
+    .replace(/---CONTENT END---/gi, '')
+    .replace(/^\s*[-=]{3,}\s*$/gm, '')             // Lines with just --- or ===
+    .replace(/\n{3,}/g, '\n\n')                    // Multiple newlines to double
+    .trim();
   
   return cleanedResponse;
 }
