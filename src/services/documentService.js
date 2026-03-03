@@ -672,6 +672,14 @@ class DocumentService {
    */
   async insertContentSection(heading, content, newPage) {
     if (newPage === undefined) newPage = false;
+    if (!content || typeof content !== 'string') content = '';
+    
+    // Unescape literal \n \r \t (AI sometimes outputs these as text)
+    var unescaped = content;
+    while (unescaped.indexOf('\\n') !== -1) unescaped = unescaped.replace(/\\n/g, '\n');
+    while (unescaped.indexOf('\\r') !== -1) unescaped = unescaped.replace(/\\r/g, '\r');
+    while (unescaped.indexOf('\\t') !== -1) unescaped = unescaped.replace(/\\t/g, '\t');
+    content = unescaped;
     
     return new Promise(function(resolve, reject) {
       Word.run(function(context) {
@@ -691,11 +699,23 @@ class DocumentService {
           headingPara.styleBuiltIn = Word.Style.heading1;
         }
         
-        // Add content paragraphs
-        var paragraphs = content.split('\n\n');
-        paragraphs.forEach(function(para) {
-          if (para.trim()) {
-            body.insertParagraph(para.trim(), Word.InsertLocation.end);
+        // Add content paragraphs - split by double newline; for References/list blocks, also split by single newline
+        var blocks = content.split(/\n\n+/);
+        blocks.forEach(function(block) {
+          var trimmed = block.trim();
+          if (!trimmed) return;
+          var lines = trimmed.split('\n');
+          var isRefList = lines.length > 1 && (/^References?:?\s*$/i.test(lines[0]) || /^Bibliography:?\s*$/i.test(lines[0]) || /et al\.\s*\(\d{4}\)/.test(trimmed));
+          if (isRefList) {
+            lines.forEach(function(line) {
+              if (line.trim()) {
+                var p = body.insertParagraph(line.trim(), Word.InsertLocation.end);
+                p.styleBuiltIn = Word.Style.normal;
+              }
+            });
+          } else {
+            var p = body.insertParagraph(trimmed, Word.InsertLocation.end);
+            p.styleBuiltIn = Word.Style.normal;
           }
         });
         

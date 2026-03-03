@@ -180,6 +180,7 @@ async function handleLegacyInsertAction(response, cleanedResponse, documentServi
     if (content && content.length > 10) {
       try {
         content = content.replace(/\[ACTION:[^\]]*\]/gi, '').replace(/\[\/[A-Z]+\]/gi, '').trim();
+        content = content.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\r/g, '\r');
         await documentService.insertContentSection(heading, content, newPage);
         addSystemMessage("📝 Content inserted into document!");
       } catch (error) {
@@ -287,9 +288,8 @@ async function handleLegacyCreateAction(response, cleanedResponse, documentServi
   
   if (createMatch) {
     var newDocContent = createMatch[1].trim();
-    newDocContent = newDocContent.replace(/\[ACTION:[^\]]*\]/gi, '');
-    newDocContent = newDocContent.replace(/\[\/[A-Z]+\]/gi, '');
-    newDocContent = newDocContent.trim();
+    newDocContent = newDocContent.replace(/\[ACTION:[^\]]*\]/gi, '').replace(/\[\/[A-Z]+\]/gi, '').trim();
+    newDocContent = newDocContent.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\r/g, '\r');
     
     if (newDocContent && newDocContent.length > 10) {
       try {

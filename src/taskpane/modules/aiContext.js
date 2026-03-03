@@ -24,8 +24,7 @@ The user opened this add-in from a document they want to write in. ALWAYS use [A
 Format - use this for ALL write requests (assignments, articles, essays):
 [ACTION: INSERT heading="Your Title" newpage=false]
 ---CONTENT START---
-Your full content here. Use multiple paragraphs separated by blank lines.
-Each paragraph will become a Word paragraph.
+Your full content here. Use real line breaks between paragraphs and list items. NEVER use \\n or \\t—write actual newlines. For References, put each citation on its own line (one line break between them).
 Do NOT include [ACTION: CREATE] or other tags inside the content.
 ---CONTENT END---
 
