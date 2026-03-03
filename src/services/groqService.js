@@ -5,7 +5,7 @@ class GroqService {
   constructor() {
     this.apiKey = null;
     this.baseUrl = 'https://api.groq.com/openai/v1/chat/completions';
-    this.model = 'llama-3.1-8b-instant'; // Updated default model (supported)
+    this.model = 'llama-3.3-70b-versatile'; // Most capable production model
   }
 
   /**
@@ -79,7 +79,7 @@ class GroqService {
       model: options.model || this.model,
       messages: messages,
       temperature: options.temperature || 0.7,
-      max_tokens: options.max_tokens || 2000,
+      max_tokens: options.max_tokens || 8192,
       top_p: options.top_p || 1,
       stream: false
     };
@@ -140,7 +140,7 @@ class GroqService {
       model: options.model || this.model,
       messages: messages,
       temperature: options.temperature || 0.7,
-      max_tokens: options.max_tokens || 2000,
+      max_tokens: options.max_tokens || 8192,
       stream: true
     };
 
@@ -199,10 +199,10 @@ class GroqService {
    */
   getAvailableModels() {
     return [
-      { id: 'llama-3.1-70b-versatile', name: 'Llama 3.1 70B (Fast & Versatile)' },
+      { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B (Most Capable)' },
       { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B (Instant)' },
-      { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B (Large Context)' },
-      { id: 'gemma-7b-it', name: 'Gemma 7B' }
+      { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B' },
+      { id: 'openai/gpt-oss-20b', name: 'GPT OSS 20B' }
     ];
   }
 

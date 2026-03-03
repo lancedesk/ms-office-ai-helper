@@ -176,9 +176,14 @@ function attachEventHandlers() {
     if (messageInput) {
       messageInput.onkeypress = null;
       messageInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
           sendMessage();
         }
+      });
+      messageInput.addEventListener('input', function() {
+        messageInput.style.height = 'auto';
+        messageInput.style.height = Math.max(44, Math.min(messageInput.scrollHeight, 150)) + 'px';
       });
     }
   } catch (err) {
@@ -204,7 +209,7 @@ async function initializeApp() {
     
     var currentService = currentProvider === 'groq' ? groqService : geminiService;
     if (currentService.hasApiKey()) {
-      addSystemMessage("🎉 Ready to chat! Using: " + (currentProvider === 'groq' ? 'Groq' : 'Google Gemini'));
+      // Ready to chat - no banner message
     } else {
       addSystemMessage("👋 Welcome! Please configure your API key to get started.");
       showApiKeySettings();
@@ -234,6 +239,7 @@ async function sendMessage() {
   // Show user message first
   addUserMessage(message);
   messageInput.value = "";
+  messageInput.style.height = '44px';
   
   // Check if user is confirming a pending CREATE fallback
   if (window._pendingCreateContent && message.toLowerCase().match(/^(yes|yeah|ok|confirm|do it|replace)/)) {

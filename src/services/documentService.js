@@ -156,7 +156,7 @@ class DocumentService {
    */
   formatContextForAI(context) {
     if (context.isEmpty) {
-      return "The document is currently empty.";
+      return "The document is currently empty. When the user asks to write content, use [ACTION: INSERT] to add it here.";
     }
 
     let formatted = `Document Information:\n`;
@@ -170,6 +170,7 @@ class DocumentService {
 
     formatted += `\nDocument Content:\n`;
     formatted += context.content;
+    formatted += `\n\nIMPORTANT: The user has content in this document. When they ask to write something, use [ACTION: INSERT] to APPEND at the end. Do NOT create a new document.`;
 
     if (context.isTruncated) {
       formatted += `\n\n[Content truncated at ${context.truncatedAt} characters. Full document has ${context.contentLength} characters.]`;
@@ -670,15 +671,18 @@ class DocumentService {
    * @returns {Promise<boolean>} Success status
    */
   async insertContentSection(heading, content, newPage) {
-    if (newPage === undefined) newPage = true;
+    if (newPage === undefined) newPage = false;
     
     return new Promise(function(resolve, reject) {
       Word.run(function(context) {
         var body = context.document.body;
         
-        // Add page break for new section
+        // Add page break for new section (when newPage=true)
         if (newPage) {
           body.insertBreak(Word.BreakType.page, Word.InsertLocation.end);
+        } else {
+          // Add blank paragraph for visual separation when appending
+          body.insertParagraph('', Word.InsertLocation.end);
         }
         
         // Add heading if provided

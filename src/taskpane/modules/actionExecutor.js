@@ -4,6 +4,29 @@
 import { addSystemMessage } from './chatUI.js';
 
 /**
+ * Sanitize code extracted from [EXECUTE] block - remove markdown, fix common issues
+ * @param {string} code - Raw code from AI response
+ * @returns {string} Sanitized code
+ */
+function sanitizeExecuteCode(code) {
+  var s = code.trim();
+  s = s.replace(/^```[\w]*\s*/g, '').replace(/\s*```$/g, '').trim();
+  s = s.replace(/\bconst\b/g, 'var').replace(/\blet\b/g, 'var');
+  return s;
+}
+
+/**
+ * Validate that code has required structure before execution
+ * @param {string} code - Code to validate
+ * @returns {boolean} True if code looks valid
+ */
+function validateExecuteCode(code) {
+  if (!code || code.length < 15) return false;
+  if (code.indexOf('Word.run') === -1) return false;
+  return true;
+}
+
+/**
  * Parse AI response and execute any [EXECUTE] code blocks
  * @param {string} response - AI response text
  * @param {object} documentService - Document service instance
@@ -23,17 +46,23 @@ async function parseAndExecuteActions(response, documentService) {
     
     if (code) {
       try {
+        code = sanitizeExecuteCode(code);
+        if (!validateExecuteCode(code)) {
+          errors.push("Generated code missing required Word.run/context.sync. Try rephrasing your request.");
+          continue;
+        }
         console.log("Executing dynamic Office.js code:", code.substring(0, 100) + "...");
         
-        // Execute the code dynamically
-        var asyncFunc = new Function('Word', 'context', 'return (async () => { ' + code + ' })()');
-        await asyncFunc(Word, null);
+        var asyncFunc = new Function('Word', 'return (async function() { ' + code + ' })()');
+        await asyncFunc(Word);
         
         executedCount++;
         console.log("Code executed successfully");
       } catch (error) {
         console.error("Error executing dynamic code:", error);
-        errors.push(error.message);
+        var msg = error.message || String(error);
+        if (msg.length > 80) msg = msg.substring(0, 77) + "...";
+        errors.push(msg);
       }
     }
   }
@@ -43,7 +72,8 @@ async function parseAndExecuteActions(response, documentService) {
     addSystemMessage("✅ Done! Executed " + executedCount + " action" + (executedCount > 1 ? "s" : "") + " successfully.");
   }
   if (errors.length > 0) {
-    addSystemMessage("⚠️ Some actions failed: " + errors.join(", "));
+    var errMsg = errors.length === 1 ? errors[0] : errors.join("; ");
+    addSystemMessage("⚠️ Action couldn't run: " + errMsg + " Try rephrasing your request.");
   }
   
   // Remove all [EXECUTE] blocks from displayed response
@@ -131,8 +161,37 @@ async function handleLegacyFormatAction(response, cleanedResponse, documentServi
 
 /**
  * Handle legacy INSERT actions
+ * Supports two formats:
+ * 1. [ACTION: INSERT heading="X" newpage=true] ---CONTENT START--- ... ---CONTENT END--- (for long content)
+ * 2. [ACTION: INSERT heading="X" content="short" newpage=true] (for short content)
  */
 async function handleLegacyInsertAction(response, cleanedResponse, documentService) {
+  // Format 1: INSERT with ---CONTENT START--- ---CONTENT END--- (best for articles, essays)
+  var insertBlockRegex = /\[ACTION:\s*INSERT\s+([^\]]*)\]\s*---CONTENT START---\s*([\s\S]*?)\s*---CONTENT END---/gi;
+  var insertBlockMatch = insertBlockRegex.exec(response);
+  
+  if (insertBlockMatch) {
+    var insertParams = insertBlockMatch[1];
+    var content = insertBlockMatch[2].trim();
+    var headingMatch = insertParams.match(/heading\s*=\s*["']([^"']+)["']/i);
+    var heading = headingMatch ? headingMatch[1] : null;
+    var newPage = /newpage\s*=\s*true/i.test(insertParams);
+    
+    if (content && content.length > 10) {
+      try {
+        content = content.replace(/\[ACTION:[^\]]*\]/gi, '').replace(/\[\/[A-Z]+\]/gi, '').trim();
+        await documentService.insertContentSection(heading, content, newPage);
+        addSystemMessage("📝 Content inserted into document!");
+      } catch (error) {
+        console.error("Error executing INSERT action:", error);
+        addSystemMessage("⚠️ Failed to insert content: " + error.message);
+      }
+    }
+    cleanedResponse = cleanedResponse.replace(/\[ACTION:\s*INSERT\s+[^\]]*\]\s*---CONTENT START---[\s\S]*?---CONTENT END---/gi, '').trim();
+    return cleanedResponse;
+  }
+  
+  // Format 2: INSERT with inline content= (for short content)
   var insertRegex = /\[ACTION:\s*INSERT\s+([^\]]+)\]/gi;
   var insertMatch = insertRegex.exec(response);
   
@@ -140,18 +199,17 @@ async function handleLegacyInsertAction(response, cleanedResponse, documentServi
     var insertParams = insertMatch[1];
     var headingMatch = insertParams.match(/heading\s*=\s*["']([^"']+)["']/i);
     var heading = headingMatch ? headingMatch[1] : null;
-    var contentMatch = insertParams.match(/content\s*=\s*["'](.+?)["']\s*(?:newpage|$)/is);
-    var content = contentMatch ? contentMatch[1] : null;
+    var contentMatch = insertParams.match(/content\s*=\s*["']((?:[^"']|\\"|\\')*)["']/i);
+    var content = contentMatch ? contentMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim() : null;
     var newPage = /newpage\s*=\s*true/i.test(insertParams);
-    if (!/newpage\s*=/i.test(insertParams)) newPage = true;
     
     if (content) {
       try {
-        content = content.replace(/\\n/g, '\n').trim();
         await documentService.insertContentSection(heading, content, newPage);
-        console.log("INSERT action executed successfully");
+        addSystemMessage("📝 Content inserted into document!");
       } catch (error) {
         console.error("Error executing INSERT action:", error);
+        addSystemMessage("⚠️ Failed to insert content: " + error.message);
       }
     }
     cleanedResponse = cleanedResponse.replace(insertRegex, '').trim();
@@ -235,21 +293,12 @@ async function handleLegacyCreateAction(response, cleanedResponse, documentServi
     
     if (newDocContent && newDocContent.length > 10) {
       try {
-        var result = await documentService.createDocument(newDocContent);
-        if (result.success) {
-          addSystemMessage("📄 New document created! Check the new Word window.");
-          if (result.hasContent) {
-            addSystemMessage("💡 Tip: The content for your new document is ready.");
-          }
-        }
+        // INSERT into current document instead of creating new (CREATE opens blank doc with no content)
+        await documentService.insertContentSection(null, newDocContent, false);
+        addSystemMessage("📝 Content inserted into your document!");
       } catch (error) {
-        console.error("Error executing CREATE action:", error);
-        if (error.message === "CREATE_NOT_SUPPORTED") {
-          addSystemMessage("⚠️ Creating new documents isn't supported. Reply 'yes' to replace current document instead.");
-          window._pendingCreateContent = newDocContent;
-        } else {
-          addSystemMessage("⚠️ Failed to create new document: " + error.message);
-        }
+        console.error("Error executing CREATE/INSERT action:", error);
+        addSystemMessage("⚠️ Failed to insert content: " + error.message);
       }
     }
     cleanedResponse = cleanedResponse.replace(/\[ACTION:\s*CREATE\s*\]\s*---CONTENT START---[\s\S]*/gi, '').trim();

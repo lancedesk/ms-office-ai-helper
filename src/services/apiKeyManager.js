@@ -304,7 +304,7 @@ class APIKeyManager {
    * @returns {string} Display name
    */
   getProviderName(provider) {
-    if (provider === 'groq') return 'Groq (Llama 3.1)';
+    if (provider === 'groq') return 'Groq (Llama 3.3 70B)';
     if (provider === 'gemini') return 'Google Gemini';
     return 'Unknown';
   }

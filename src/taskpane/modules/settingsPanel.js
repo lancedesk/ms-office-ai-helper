@@ -88,7 +88,7 @@ function showApiKeySetup() {
       
       '<div class="provider-tabs">' +
         '<button class="provider-tab active" onclick="switchSetupProvider(\'groq\')">' +
-          '⚡ Groq (Llama 3.1)' +
+          '⚡ Groq (Llama 3.3 70B)' +
         '</button>' +
         '<button class="provider-tab" onclick="switchSetupProvider(\'gemini\')">' +
           '🧠 Google Gemini' +
